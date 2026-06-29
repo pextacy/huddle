@@ -35,8 +35,10 @@ function appDir () {
   return join(process.env.XDG_DATA_HOME || join(home, '.local', 'share'), APP_DIR)
 }
 
-export function createBridge () {
-  const baseDir = appDir()
+export function createBridge (opts = {}) {
+  const baseDir = opts.baseDir || appDir()
+  const enableSwarm = opts.enableSwarm !== false // default on
+  const enableWallet = opts.enableWallet !== false // default on
   mkdirSync(baseDir, { recursive: true })
   const groupMetaPath = join(baseDir, 'group.json')
 
@@ -55,6 +57,7 @@ export function createBridge () {
   // ── wallet ────────────────────────────────────────────────────────────────
   async function ensureWallet () {
     if (wallet || walletError) return
+    if (!enableWallet) { walletError = 'wallet disabled'; return }
     try {
       const { seed } = loadOrCreateSeed(generateSeed)
       wallet = await openWallet(seed)
@@ -92,13 +95,15 @@ export function createBridge () {
     const store = new Corestore(join(baseDir, 'store', meta.id))
     const base = await openLedger(store, bootstrap || null)
     let swarm = null
-    try {
-      const res = await Promise.race([
-        joinSwarm(topic, store),
-        new Promise((resolve) => setTimeout(() => resolve(null), 8000)) // best-effort; don't hang
-      ])
-      swarm = res?.swarm ? res : null
-    } catch (e) { /* offline-capable: ledger still works locally */ }
+    if (enableSwarm) {
+      try {
+        const res = await Promise.race([
+          joinSwarm(topic, store),
+          new Promise((resolve) => setTimeout(() => resolve(null), 8000)) // best-effort; don't hang
+        ])
+        swarm = res?.swarm ? res : null
+      } catch (e) { /* offline-capable: ledger still works locally */ }
+    }
 
     ledger = { store, base, swarm, group: meta }
 

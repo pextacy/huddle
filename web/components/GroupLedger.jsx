@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { post } from '../lib/api'
 import AddExpense from './AddExpense'
+import Qr from './Qr'
 
 function fmt (minor) {
   const neg = minor < 0
@@ -17,6 +18,7 @@ function nameOf (group, id) {
 export default function GroupLedger ({ group, wallet }) {
   const [writerKey, setWriterKey] = useState('')
   const [copied, setCopied] = useState(false)
+  const [showQr, setShowQr] = useState(false)
   const [err, setErr] = useState(null)
   const [settling, setSettling] = useState(null) // index being settled
   const [settleErr, setSettleErr] = useState(null)
@@ -64,7 +66,13 @@ export default function GroupLedger ({ group, wallet }) {
           <div className="row" style={{ gap: 8 }}>
             <div className="mono small" style={{ flex: 1 }}>{group.group.invite}</div>
             <button className="btn small secondary" onClick={copyInvite}>{copied ? 'Copied' : 'Copy'}</button>
+            <button className="btn small secondary" onClick={() => setShowQr((v) => !v)}>{showQr ? 'Hide QR' : 'QR'}</button>
           </div>
+          {showQr && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+              <Qr text={group.group.invite} size={180} />
+            </div>
+          )}
         </div>
       </div>
 
