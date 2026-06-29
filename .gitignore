@@ -11,6 +11,9 @@ storage/
 .env
 .env.*
 
+# Generated wallet preview (rendered from live on-chain data)
+wallet-preview.html
+
 # OS / editor
 .DS_Store
 *.log

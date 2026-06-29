@@ -9,7 +9,9 @@
     "test": "node --test 'test/**/*.test.js'",
     "dev": "pear run --dev .",
     "stage": "pear stage dev",
-    "release": "pear release dev"
+    "release": "pear release dev",
+    "wallet:status": "node scripts/wallet.mjs status",
+    "wallet:send": "node scripts/wallet.mjs send"
   },
   "pear": {
     "name": "splitkick-plus",
@@ -28,7 +30,8 @@
     "corestore": "7.11.0",
     "hyperbee": "2.27.3",
     "hypercore-crypto": "3.7.0",
-    "hyperswarm": "4.17.0"
+    "hyperswarm": "4.17.0",
+    "qrcode-generator": "2.0.4"
   },
   "devDependencies": {
     "pear-interface": "1.1.0"

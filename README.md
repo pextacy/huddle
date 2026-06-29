@@ -16,8 +16,30 @@ plan, and phase breakdown.
 
 ## Status
 
-Phase 0 (scaffold) complete. The runnable build grows phase by phase — see
-[`docs/phases.md`](docs/phases.md).
+Phase 1 (wallet path) complete: a real self-custodial wallet on Ethereum Sepolia that
+reads live balances and sends real on-chain USD₮ (ERC-20) transfers. See
+[`docs/phases.md`](docs/phases.md) for the full plan.
+
+## Wallet (Phase 1)
+
+The wallet is self-custodial: a 24-word seed is generated on first run and stored only on
+this device (`~/Library/Application Support/splitkick-plus/wallet.seed`, owner-only). It is
+never logged, never committed, never replicated.
+
+```bash
+npm run wallet:status                 # address, network, live native + USD₮ balances
+node scripts/wallet.mjs address       # just the receive address
+node scripts/wallet.mjs view          # render the wallet screen to wallet-preview.html
+npm run wallet:send -- <to> <usdt>    # real on-chain USD₮ transfer -> prints the tx hash
+```
+
+Network: **Ethereum Sepolia** (testnet, chainId 11155111). USD₮ is the Aave Sepolia faucet
+token (real ERC-20, 6 decimals). To move funds on-chain, fund the displayed address first:
+
+- Gas (Sepolia ETH): https://www.alchemy.com/faucets/ethereum-sepolia
+- Test USD₮: https://app.aave.com/faucet/ (switch to Sepolia, mint USDT)
+
+Override the RPC, token, or seed with `SPLITKICK_RPC`, `SPLITKICK_USDT`, `SPLITKICK_SEED`.
 
 ## Prerequisites
 
