@@ -110,22 +110,23 @@ Dosyalar: `src/domain/{entries.js,balances.js,settlement.js}`, `test/domain.test
 **Amaç:** sunucusuz, çok-yazarlı, yeniden başlatmaya dayanıklı ortak ledger. İki peer aynı görüşe
 yakınsar.
 
-Dosyalar: `src/p2p/{topic.js,swarm.js,ledger.js}`
+Dosyalar: `src/p2p/{topic.js,swarm.js,ledger.js}`, `test/p2p.test.js`, `scripts/verify-p2p.mjs`
 
-- [ ] `topic.js`: grup secret'ından deterministik 32-byte topic; invite code round-trip eder
-      (`crypto.hash(groupSecret)`, hex invite — docs.md §6.1). (FR-1, FR-2)
-- [ ] `swarm.js`: Hyperswarm join (`{ server: true, client: true }`), `store.replicate(conn)`,
-      `Pear.teardown(() => swarm.destroy())` ile temiz kapanış / DHT kaydının bırakılması
-      (docs.md §6.2).
-- [ ] `ledger.js`: Autobase + Hyperbee view; `apply` `addWriter` + entry'leri işler; Corestore ile
-      kalıcı (docs.md §6.3). `apply` içinde **`Date.now()` yok**, ts entry payload'ından gelir.
-- [ ] İki süreç/cihaz aynı topic'e katılır ve **aynı view'a yakınsar** (FR-5).
-- [ ] Yeniden başlatmaya dayanıklı — state lokal'de kalır (FR-6).
+- [x] `topic.js`: grup secret'ından deterministik 32-byte topic; invite code round-trip eder
+      (`crypto.hash(groupSecret)`, hex invite — docs.md §6.1). Birim testli. (FR-1, FR-2)
+- [x] `swarm.js`: Hyperswarm join (`{ server: true, client: true }`), `store.replicate(conn)`,
+      temiz kapanış / DHT kaydı bırakma (Pear varsa `Pear.teardown`, yoksa `destroy()`). (docs.md §6.2)
+- [x] `ledger.js`: Autobase + Hyperbee view; `apply` `addWriter` (`host.addWriter(key,{indexer:true})`)
+      + entry'leri **sortable key** ile işler; Corestore ile kalıcı; `ackInterval` ile yakınsama.
+      `apply` içinde **`Date.now()` yok**, ts entry payload'ından gelir.
+- [x] İki süreç aynı bootstrap'a katılır ve **byte-byte özdeş view'a yakınsar** — `verify-p2p.mjs` ile
+      kanıtlandı (B writer olarak yetkilendirildi, iki harcama yakınsadı). (FR-5)
+- [x] Yeniden başlatmaya dayanıklı — A diskten yeniden açıldığında özdeş view (FR-6).
 
-**Sürüm uyarısı (docs.md §6.3 not):** Autobase `apply(nodes, view, host)` / `host.addWriter`
-imzası sürümlere göre değişti; kurulu sürümün README'sini doğrula (claude.md working style).
+**Sürüm uyarısı (çözüldü):** Autobase imzası kurulu `autobase@7.28.1`'e göre doğrulandı —
+`apply(nodes, view, host)` + `host.addWriter(key, { indexer: true })`, view = Hyperbee. Kod buna göre.
 
-**Done =** gerçek çok-yazarlı sync, sunucu yok, restart'tan sağ çıkıyor.
+**Done =** gerçek çok-yazarlı sync (30/30 test + `npm run p2p:verify` PASS), sunucu yok, restart'tan sağ çıkıyor.
 
 ---
 

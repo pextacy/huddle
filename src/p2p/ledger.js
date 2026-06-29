@@ -1,27 +1,109 @@
 /**
  * Multi-writer ledger: Autobase + Hyperbee view (docs/docs.md §6.3).
  *
- * The Autobase `apply` function folds writer entries into a Hyperbee key/value view that
- * is identical on every peer. `apply` must be pure and deterministic: no Date.now(), no
- * iteration-order assumptions (docs/claude.md). Persisted via Corestore (survives restart).
+ * Verified against the installed autobase@7.28.1 API:
+ *   new Autobase(store, bootstrap, { open, apply, valueEncoding })
+ *   apply(nodes, view, host): host.addWriter(key, { indexer: true }); view.put(key, value)
+ *   base.append(value) · base.update() · base.view (the Hyperbee) · base.local.key · base.key
  *
- * NOTE: the Autobase apply/host signature shifts across releases — verify against the
- * installed version's README (docs/docs.md §6.3 note).
- *
- * Implemented in Phase 3. See docs/phases.md.
+ * The `apply` function is pure and deterministic — no Date.now(), no iteration-order
+ * assumptions. Entries are stored under a stable, sortable key so every peer's Hyperbee view
+ * is byte-for-byte identical (docs/claude.md determinism). Persisted via Corestore, so the
+ * ledger survives an app restart.
  */
 
-/** @param {object} store @param {Buffer|null} bootstrap @returns {Promise<object>} */
-export async function openLedger (store, bootstrap) {
-  throw new Error('not implemented yet — Phase 3')
+import Autobase from 'autobase'
+import Hyperbee from 'hyperbee'
+import b4a from 'b4a'
+
+/** Pad a timestamp so string keys sort in chronological order. */
+function tsKey (ts) {
+  return String(ts ?? 0).padStart(16, '0')
 }
 
-/** @param {object} base @param {object} entry @returns {Promise<void>} */
+/** Stable, sortable Hyperbee key for an entry. */
+function entryKey (op) {
+  const id = op.id ?? op.member ?? op.key ?? ''
+  return `${op.type}:${tsKey(op.ts)}:${id}`
+}
+
+function open (store) {
+  return new Hyperbee(store.get('ledger-view'), {
+    keyEncoding: 'utf-8',
+    valueEncoding: 'json'
+  })
+}
+
+async function apply (nodes, view, host) {
+  for (const node of nodes) {
+    const op = node.value
+    if (!op || typeof op !== 'object') continue
+
+    // Authorize a new writer (a member joining the group).
+    if (op.type === 'addWriter') {
+      await host.addWriter(b4a.from(op.key, 'hex'), { indexer: true })
+      continue
+    }
+
+    // Everything else is a ledger entry, stored under a deterministic key.
+    await view.put(entryKey(op), op)
+  }
+}
+
+/**
+ * Open (or create) the ledger Autobase over a Corestore.
+ * @param {object} store - a Corestore
+ * @param {Buffer|string|null} [bootstrap] - the group's base key (hex or buffer) to join an
+ *   existing ledger, or null to create a new one (the group creator).
+ * @param {{ ackInterval?: number }} [opts] - ackInterval (ms) lets indexers eagerly merge
+ *   causal forks so peers converge promptly (default 1000).
+ * @returns {Promise<object>} the ready Autobase
+ */
+export async function openLedger (store, bootstrap = null, opts = {}) {
+  const key = typeof bootstrap === 'string' ? b4a.from(bootstrap, 'hex') : bootstrap
+  const base = new Autobase(store, key, {
+    open,
+    apply,
+    valueEncoding: 'json',
+    ackInterval: opts.ackInterval ?? 1000
+  })
+  await base.ready()
+  return base
+}
+
+/** Append a ledger entry from this peer (triggers apply + replication). */
 export async function appendEntry (base, entry) {
-  throw new Error('not implemented yet — Phase 3')
+  await base.append(entry)
 }
 
-/** @param {object} base @returns {Promise<object[]>} */
+/**
+ * Authorize another member's writer key so their appends count in the view.
+ * @param {object} base
+ * @param {string} writerKeyHex - the joining member's base.local.key in hex
+ */
+export async function addWriter (base, writerKeyHex) {
+  await base.append({ type: 'addWriter', key: writerKeyHex })
+}
+
+/** Read the whole ledger view as an array of entries, in key order. */
 export async function readLedger (base) {
-  throw new Error('not implemented yet — Phase 3')
+  await base.update()
+  const entries = []
+  for await (const { value } of base.view.createReadStream()) entries.push(value)
+  return entries
+}
+
+/** This peer's writer key (hex) — share it so an existing writer can addWriter() it. */
+export function localWriterKey (base) {
+  return b4a.toString(base.local.key, 'hex')
+}
+
+/** The group's bootstrap key (hex) — share it (with the invite) so peers join the same ledger. */
+export function bootstrapKey (base) {
+  return b4a.toString(base.key, 'hex')
+}
+
+/** Whether this peer is currently allowed to write to the ledger. */
+export function isWritable (base) {
+  return base.writable
 }
