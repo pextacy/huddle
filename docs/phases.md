@@ -147,15 +147,20 @@ Dosyalar: `src/p2p/{topic.js,swarm.js,ledger.js}`, `test/p2p.test.js`, `scripts/
 
 **Amaç:** bir yabancının dakikalar içinde kurup anlayabileceği, flat ve hızlı arayüz.
 
-Dosyalar: `src/ui/*`
+> **Frontend stack kararı (kullanıcı, 2026-06-29): Next.js + React.** Holepunch + WDK Node'da
+> çalıştığından mimari = **Node backend (`server/`) + Next.js frontend (`web/`)**, HTTP/SSE ile.
+> Bu, dokümanların "tek Bare app + vanilla HTML UI" tezinin yerine geçer. Frontend iskeleti Faz 3
+> ile birlikte kuruldu (backend bridge ledger/cüzdan/domain'i açıyor); cilalama Faz 5'te.
 
-- [ ] PRD ekranları: Home/Groups, Group ledger, Add expense, Settle up, Wallet, Onboarding (PRD §8).
-- [ ] **Solid renk, flat, yüksek kontrast tema. Gradient yok.** Dark-mode dostu, büyük tap hedefleri
-      (claude.md visual / PRD §8).
-- [ ] Empty/error/loading state'leri; **yanılmaya yer bırakmayan offline göstergesi**.
-- [ ] Tek komutla kurulum README'si — judge out-of-the-box çalıştırsın (NFR-5).
+Dosyalar: `web/` (Next.js App Router, React), `server/{bridge.mjs,index.mjs}`
 
-**Done =** bir yabancı kurar, çalıştırır ve dakikalar içinde anlar.
+- [x] Frontend Next.js/React'e taşındı; backend bridge (REST + SSE) gerçek modülleri açıyor; build geçiyor.
+- [x] PRD ekranları (kısmen): Wallet, Onboarding (create/join), Group ledger, Add expense, Settle (plan).
+- [x] **Solid renk, flat tema. Gradient yok.** Online/offline göstergesi; empty/error/loading state'leri.
+- [ ] Settle up'ta gerçek "Pay in USD₮" (Faz 4); restore/edge cilalama; tek-komut judge kurulumu (NFR-5).
+
+**Done (kısmi) =** `npm run server` + `cd web && npm run dev` ile çalışır; gerçek cüzdan + P2P ledger
+verisini gösterir. Tam cilalama Faz 4 (settle loop) sonrası tamamlanır.
 
 ---
 

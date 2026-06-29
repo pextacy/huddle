@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 
+# Next.js frontend build output
+web/.next/
+web/out/
+web/next-env.d.ts
+
 # Pear / Bare local-first storage (never commit ledger/wallet state)
 .pear/
 store/

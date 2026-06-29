@@ -51,31 +51,40 @@ SPLITKICK_NETWORK=mainnet npm run wallet:status    # Ethereum mainnet — REAL U
 Override the network, RPC, token, or seed with `SPLITKICK_NETWORK`, `SPLITKICK_RPC`,
 `SPLITKICK_USDT`, `SPLITKICK_SEED`. The same seed derives the same address on every network.
 
+## Architecture
+
+The P2P ledger (Hyperswarm/Autobase/Hyperbee) and the self-custodial wallet (WDK) run in
+**Node**, not the browser. So the app is two pieces:
+
+- **Backend** (`server/`) — owns the live P2P ledger + wallet + domain logic and exposes a
+  small REST + SSE API on `http://localhost:8787`.
+- **Frontend** (`web/`) — a **Next.js / React** app that talks to the backend over HTTP/SSE.
+
+The pure pieces live in `src/{domain,wallet,p2p}` and are shared by the backend, the CLI, and
+the tests.
+
 ## Prerequisites
 
-- [Node.js](https://nodejs.org) 18+ (used for the deterministic domain tests).
-- The Pear runtime CLI:
+- [Node.js](https://nodejs.org) 18+.
 
-  ```bash
-  npm install -g pear
-  ```
-
-## Setup
+## Run (backend + frontend)
 
 ```bash
-npm install            # install pinned dependencies
+npm install                  # backend deps (root)
+npm run server               # backend on http://localhost:8787
+
+cd web && npm install        # frontend deps
+npm run dev                  # Next.js app on http://localhost:3000
 ```
 
-## Run
-
-```bash
-npm run dev            # pear run --dev .  — launches the app
-```
+Open http://localhost:3000 — create a group, add an expense, and watch balances + the minimal
+settlement plan compute from the P2P ledger.
 
 ## Test
 
 ```bash
-npm test               # run the deterministic domain tests (node --test)
+npm test                     # deterministic domain + p2p + wallet tests (node --test)
+npm run p2p:verify           # two real peers converge + restart-safe
 ```
 
 ## Layout

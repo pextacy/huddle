@@ -12,7 +12,8 @@
     "release": "pear release dev",
     "wallet:status": "node scripts/wallet.mjs status",
     "wallet:send": "node scripts/wallet.mjs send",
-    "p2p:verify": "node scripts/verify-p2p.mjs"
+    "p2p:verify": "node scripts/verify-p2p.mjs",
+    "server": "node server/index.mjs"
   },
   "pear": {
     "name": "splitkick-plus",
