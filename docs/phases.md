@@ -86,20 +86,22 @@ etti, yani yol gerçek). Görünür tx hash'li broadcast için adresin testnet f
 **Amaç:** bakiye + minimal-transfer settlement, I/O'suz, kanıtlanabilir doğru. Faz 1 ile paralel.
 `/src/domain` tamamen saf ve deterministik kalır (claude.md determinism).
 
-Dosyalar: `src/domain/{entries.js,balances.js,settlement.js}`, `test/*`
+Dosyalar: `src/domain/{entries.js,balances.js,settlement.js}`, `test/domain.test.js`
 
-- [ ] `entries.js`: entry tipleri ve doğrulama — `expense`, `payment`, `wallet`, `addWriter`
-      (docs.md §5 şeması). Tutarlar tamsayı minor unit.
-- [ ] `balances.js` → `computeBalances(entries)`: net bakiye (+ alacaklı / − borçlu).
-      Eşit bölüşümde kalanı **deterministik** dağıt (docs.md §7.1 `splitShares`).
-- [ ] `settlement.js` → `settlementPlan(net)`: greedy min-cash-flow → minimal transfer kümesi
-      (docs.md §7.2).
-- [ ] Birim testleri (worked examples): 5 kişilik gezi → ≤ 4 transfer; kalan dağıtımı; idempotent
-      `payment` tx hash üzerinden çift sayılmıyor.
+- [x] `entries.js`: entry tipleri ve doğrulama — `expense`, `payment`, `wallet`, `addWriter`
+      (docs.md §5 şeması). Tutarlar tamsayı minor unit; `makeExpense`/`makePayment` ts'i dışarıdan alır
+      (domain'de `Date.now` yok). Float/negatif/eksik-txHash reddedilir.
+- [x] `balances.js` → `computeBalances(entries)`: net bakiye (+ alacaklı / − borçlu).
+      Eşit bölüşümde kalanı **deterministik** dağıt (docs.md §7.1 `splitShares`); `payment` tx hash
+      üzerinden **idempotent**.
+- [x] `settlement.js` → `settlementPlan(net)`: greedy min-cash-flow → minimal transfer kümesi
+      (docs.md §7.2); beraberlik memberId ile bozulur → net anahtar sırasından bağımsız, deterministik.
+- [x] Birim testleri (13 domain testi): 5 kişilik gezi → **4 transfer** ve herkes sıfırlanır; kalan
+      dağıtımı; idempotent `payment`; determinizm; korunum (plan net'i tam sıfırlar); custom split.
 
-**Not (scope, prd.md §11 / plan.md §6):** önce **equal-only** split; custom split zaman kalırsa.
+**Not (scope, prd.md §11 / plan.md §6):** equal-only **ve** custom split ikisi de destekleniyor + test edildi.
 
-**Done =** bakiye + minimal settlement test'lerle kanıtlanabilir doğru, hiç I/O yok.
+**Done =** bakiye + minimal settlement test'lerle kanıtlanabilir doğru (26/26 yeşil), hiç I/O yok.
 
 ---
 
