@@ -157,15 +157,16 @@ Dosyalar: `server/bridge.mjs` (`doSettle`), `web/components/GroupLedger.jsx`, `s
 > Bu, dokümanların "tek Bare app + vanilla HTML UI" tezinin yerine geçer. Frontend iskeleti Faz 3
 > ile birlikte kuruldu (backend bridge ledger/cüzdan/domain'i açıyor); cilalama Faz 5'te.
 
-Dosyalar: `web/` (Next.js App Router, React), `server/{bridge.mjs,index.mjs}`
+Dosyalar: `web/` (Next.js App Router, React), `server/{bridge.mjs,index.mjs}`, `scripts/dev.mjs`
 
 - [x] Frontend Next.js/React'e taşındı; backend bridge (REST + SSE) gerçek modülleri açıyor; build geçiyor.
-- [x] PRD ekranları (kısmen): Wallet, Onboarding (create/join), Group ledger, Add expense, Settle (plan).
+- [x] PRD ekranları: Wallet (bakiye + adres **QR** offline + ağ göstergesi), Onboarding (create/join),
+      Group ledger, Add expense, Settle up (**gerçek Pay in USD₮**).
 - [x] **Solid renk, flat tema. Gradient yok.** Online/offline göstergesi; empty/error/loading state'leri.
-- [ ] Settle up'ta gerçek "Pay in USD₮" (Faz 4); restore/edge cilalama; tek-komut judge kurulumu (NFR-5).
+- [x] Tek komutla çalıştırma: `npm run app` (backend :8787 + frontend :3000 birlikte). README out-of-the-box (NFR-5).
 
-**Done (kısmi) =** `npm run server` + `cd web && npm run dev` ile çalışır; gerçek cüzdan + P2P ledger
-verisini gösterir. Tam cilalama Faz 4 (settle loop) sonrası tamamlanır.
+**Done =** `npm install && (cd web && npm install)` → `npm run app` ile bir yabancı kurar, çalıştırır;
+gerçek cüzdan (QR), P2P ledger, bakiye, minimal plan ve on-chain settle'ı dakikalar içinde görür.
 
 ---
 

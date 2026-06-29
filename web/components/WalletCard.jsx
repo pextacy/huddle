@@ -1,5 +1,7 @@
 'use client'
 
+import Qr from './Qr'
+
 export default function WalletCard ({ wallet }) {
   if (!wallet) return null
   const online = wallet.online
@@ -23,9 +25,12 @@ export default function WalletCard ({ wallet }) {
           </div>
           <div className="amount">{wallet.usdt ?? '—'} <span className="muted" style={{ fontSize: 16, fontWeight: 400 }}>USD₮</span></div>
           <div className="muted small" style={{ marginTop: 2 }}>Gas: {wallet.gas ?? '—'} ETH</div>
-          <div className="field" style={{ marginTop: 12 }}>
-            <label>Receive address</label>
-            <div className="mono small">{wallet.address}</div>
+          <div className="row" style={{ gap: 14, marginTop: 14, alignItems: 'flex-start' }}>
+            <Qr text={wallet.address} size={120} />
+            <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+              <label>Receive address</label>
+              <div className="mono small">{wallet.address}</div>
+            </div>
           </div>
         </>
       ) : (

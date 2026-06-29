@@ -67,24 +67,24 @@ the tests.
 
 - [Node.js](https://nodejs.org) 18+.
 
-## Run (backend + frontend)
+## Run
 
 ```bash
-npm install                  # backend deps (root)
-npm run server               # backend on http://localhost:8787
-
-cd web && npm install        # frontend deps
-npm run dev                  # Next.js app on http://localhost:3000
+npm install && (cd web && npm install)   # one-time: backend + frontend deps
+npm run app                              # backend :8787 + Next.js frontend :3000 together
 ```
 
-Open http://localhost:3000 — create a group, add an expense, and watch balances + the minimal
-settlement plan compute from the P2P ledger.
+Open http://localhost:3000 — create a group, add an expense, watch balances + the minimal
+settlement plan compute from the P2P ledger, then "Pay in USD₮" to settle on-chain (testnet).
+
+Prefer separate processes? `npm run server` and, in `web/`, `npm run dev`.
 
 ## Test
 
 ```bash
 npm test                     # deterministic domain + p2p + wallet tests (node --test)
 npm run p2p:verify           # two real peers converge + restart-safe
+npm run settle:verify        # settle loop: a payment clears the debt for every peer
 ```
 
 ## Layout
