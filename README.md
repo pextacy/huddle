@@ -33,13 +33,23 @@ node scripts/wallet.mjs view          # render the wallet screen to wallet-previ
 npm run wallet:send -- <to> <usdt>    # real on-chain USD₮ transfer -> prints the tx hash
 ```
 
-Network: **Ethereum Sepolia** (testnet, chainId 11155111). USD₮ is the Aave Sepolia faucet
-token (real ERC-20, 6 decimals). To move funds on-chain, fund the displayed address first:
+### Networks
 
-- Gas (Sepolia ETH): https://www.alchemy.com/faucets/ethereum-sepolia
-- Test USD₮: https://app.aave.com/faucet/ (switch to Sepolia, mint USDT)
+Default is **Ethereum Sepolia** (testnet, chainId 11155111) — genuinely on-chain but free.
+**Mainnet is opt-in** and moves real money (the CLI/UI warn when active):
 
-Override the RPC, token, or seed with `SPLITKICK_RPC`, `SPLITKICK_USDT`, `SPLITKICK_SEED`.
+```bash
+npm run wallet:status                              # Sepolia testnet (default)
+SPLITKICK_NETWORK=mainnet npm run wallet:status    # Ethereum mainnet — REAL USD₮
+```
+
+| Network | chainId | USD₮ | Funding |
+|---|---|---|---|
+| `sepolia` (default) | 11155111 | Aave faucet test USDT (6 dp) | [ETH](https://www.alchemy.com/faucets/ethereum-sepolia) · [USD₮](https://app.aave.com/faucet/) |
+| `mainnet` | 1 | Canonical Tether `0xdAC17…ec7` (6 dp) | real ETH + USD₮ |
+
+Override the network, RPC, token, or seed with `SPLITKICK_NETWORK`, `SPLITKICK_RPC`,
+`SPLITKICK_USDT`, `SPLITKICK_SEED`. The same seed derives the same address on every network.
 
 ## Prerequisites
 

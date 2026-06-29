@@ -1,43 +1,94 @@
 /**
- * Testnet wallet configuration (docs/claude.md: testnet for the demo so settlement is
- * genuinely on-chain but costs nothing).
+ * Wallet network configuration — testnet (default) and mainnet.
  *
- * Network: Ethereum Sepolia (chainId 11155111) — reliable public RPC, easy faucets.
- * USD₮: the Aave v3 Sepolia faucet token (real ERC-20, 6 decimals, mintable via a public
- * faucet). Verified on-chain: symbol "USDT", decimals 6. Override via env for any other
- * EVM testnet/token.
+ * Default is **Sepolia testnet** so the demo is genuinely on-chain but costs nothing
+ * (docs/claude.md). **Mainnet is opt-in** via `SPLITKICK_NETWORK=mainnet` and moves real
+ * money — the CLI/UI warn loudly when it is active.
  *
- * Nothing secret lives here — only public network parameters.
+ * Selection:  SPLITKICK_NETWORK = 'sepolia' (default) | 'mainnet'
+ * Overrides:  SPLITKICK_RPC (single RPC url), SPLITKICK_USDT (token address)
+ *
+ * Nothing secret lives here — only public network parameters. Both USD₮ contracts are
+ * verified on-chain (symbol "USDT", 6 decimals).
  */
 
 const env = (typeof process !== 'undefined' && process.env) ? process.env : {}
 
+/** All supported networks. `blockchain` is the WDK registerWallet() label. */
+export const NETWORKS = {
+  sepolia: {
+    key: 'sepolia',
+    name: 'Sepolia',
+    blockchain: 'ethereum',
+    chainId: 11155111,
+    testnet: true,
+    rpcUrls: [
+      'https://ethereum-sepolia-rpc.publicnode.com',
+      'https://sepolia.drpc.org',
+      'https://rpc.sepolia.org'
+    ],
+    explorerTxUrl: 'https://sepolia.etherscan.io/tx/',
+    explorerAddressUrl: 'https://sepolia.etherscan.io/address/',
+    usdt: {
+      // Aave v3 Sepolia test USDT (checksummed, on-chain verified). Public faucet mints it.
+      address: '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0',
+      symbol: 'USDT',
+      decimals: 6
+    },
+    faucets: {
+      sepoliaEth: 'https://www.alchemy.com/faucets/ethereum-sepolia',
+      aaveUsdt: 'https://app.aave.com/faucet/' // switch to Sepolia testnet mode, mint USDT
+    }
+  },
+  mainnet: {
+    key: 'mainnet',
+    name: 'Ethereum',
+    blockchain: 'ethereum',
+    chainId: 1,
+    testnet: false,
+    rpcUrls: [
+      'https://ethereum-rpc.publicnode.com',
+      'https://eth.drpc.org',
+      'https://rpc.ankr.com/eth'
+    ],
+    explorerTxUrl: 'https://etherscan.io/tx/',
+    explorerAddressUrl: 'https://etherscan.io/address/',
+    usdt: {
+      // Canonical Tether USD₮ on Ethereum mainnet (on-chain verified).
+      address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+      symbol: 'USDT',
+      decimals: 6
+    },
+    faucets: null // real money — no faucets
+  }
+}
+
+/** The active network key (default: sepolia). */
+export const ACTIVE_NETWORK = (env.SPLITKICK_NETWORK || 'sepolia').toLowerCase()
+
+const selected = NETWORKS[ACTIVE_NETWORK]
+if (!selected) {
+  throw new Error(`Unknown SPLITKICK_NETWORK="${ACTIVE_NETWORK}". Use one of: ${Object.keys(NETWORKS).join(', ')}.`)
+}
+
+/** Active network parameters (RPC overridable via SPLITKICK_RPC). */
 export const NETWORK = {
-  name: 'Sepolia',
-  blockchain: 'ethereum', // the WDK registerWallet() label
-  chainId: 11155111,
-  // Failover list — the EVM wallet rotates on connection errors (offline-honest: this is
-  // the one part of the app that needs the internet).
-  rpcUrls: env.SPLITKICK_RPC
-    ? [env.SPLITKICK_RPC]
-    : [
-        'https://ethereum-sepolia-rpc.publicnode.com',
-        'https://sepolia.drpc.org',
-        'https://rpc.sepolia.org'
-      ],
-  explorerTxUrl: 'https://sepolia.etherscan.io/tx/',
-  explorerAddressUrl: 'https://sepolia.etherscan.io/address/'
+  key: selected.key,
+  name: selected.name,
+  blockchain: selected.blockchain,
+  chainId: selected.chainId,
+  testnet: selected.testnet,
+  rpcUrls: env.SPLITKICK_RPC ? [env.SPLITKICK_RPC] : selected.rpcUrls,
+  explorerTxUrl: selected.explorerTxUrl,
+  explorerAddressUrl: selected.explorerAddressUrl
 }
 
+/** Active USD₮ token (address overridable via SPLITKICK_USDT). */
 export const USDT = {
-  // Aave v3 Sepolia test USDT (checksummed). Public faucet mints it.
-  address: env.SPLITKICK_USDT || '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0',
-  symbol: 'USDT',
-  decimals: 6
+  address: env.SPLITKICK_USDT || selected.usdt.address,
+  symbol: selected.usdt.symbol,
+  decimals: selected.usdt.decimals
 }
 
-/** Where the demo can get testnet funds (the address must be funded to settle on-chain). */
-export const FAUCETS = {
-  sepoliaEth: 'https://www.alchemy.com/faucets/ethereum-sepolia',
-  aaveUsdt: 'https://app.aave.com/faucet/' // switch to Sepolia testnet mode, mint USDT
-}
+/** Faucets for the active network (null on mainnet). */
+export const FAUCETS = selected.faucets

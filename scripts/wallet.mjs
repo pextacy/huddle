@@ -44,6 +44,10 @@ async function main () {
   const handle = await openWallet(seed)
   const { address } = handle
 
+  if (!NETWORK.testnet) {
+    console.log('⚠️  MAINNET ACTIVE — transfers move REAL USD₮ and cost real gas.\n')
+  }
+
   try {
     if (cmd === 'address') {
       console.log(address)
@@ -57,16 +61,18 @@ async function main () {
       ])
       console.log('SplitKick+ wallet')
       console.log('─'.repeat(48))
-      console.log(`Network   : ${NETWORK.name} (chainId ${NETWORK.chainId}) · testnet`)
+      console.log(`Network   : ${NETWORK.name} (chainId ${NETWORK.chainId}) · ${NETWORK.testnet ? 'testnet' : 'mainnet'}`)
       console.log(`Address   : ${address}`)
       console.log(`Gas (ETH) : ${formatEth(wei)}`)
       console.log(`USD₮      : ${formatUsdt(usdtBase)}  [${USDT.address}]`)
       console.log('─'.repeat(48))
       console.log(`Explorer  : ${NETWORK.explorerAddressUrl}${address}`)
-      if (wei === 0n || usdtBase === 0n) {
+      if ((wei === 0n || usdtBase === 0n) && FAUCETS) {
         console.log('\nTo settle on-chain, fund this address on Sepolia:')
         if (wei === 0n) console.log(`  • Gas  : ${FAUCETS.sepoliaEth}`)
         if (usdtBase === 0n) console.log(`  • USD₮ : ${FAUCETS.aaveUsdt}  (switch to Sepolia, mint USDT)`)
+      } else if (wei === 0n || usdtBase === 0n) {
+        console.log('\nFund this address with USD₮ and ETH (gas) to settle on-chain.')
       }
       return
     }
@@ -80,7 +86,7 @@ async function main () {
         address,
         networkName: NETWORK.name,
         chainId: NETWORK.chainId,
-        testnet: true,
+        testnet: NETWORK.testnet,
         usdtText: formatUsdt(usdtBase),
         gasText: formatEth(wei),
         online: true
@@ -108,9 +114,11 @@ async function main () {
         console.log(`Estimated gas fee: ${formatEth(fee)} ETH`)
       } catch (e) {
         console.error(`\n✖ Cannot send yet: ${e.shortMessage || e.message}`)
-        console.error('  This usually means the wallet needs testnet gas and/or USD₮.')
-        console.error(`  Gas : ${FAUCETS.sepoliaEth}`)
-        console.error(`  USD₮: ${FAUCETS.aaveUsdt}`)
+        console.error('  This usually means the wallet needs gas (ETH) and/or USD₮.')
+        if (FAUCETS) {
+          console.error(`  Gas : ${FAUCETS.sepoliaEth}`)
+          console.error(`  USD₮: ${FAUCETS.aaveUsdt}`)
+        }
         process.exit(1)
       }
 
