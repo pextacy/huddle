@@ -134,12 +134,17 @@ Dosyalar: `src/p2p/{topic.js,swarm.js,ledger.js}`, `test/p2p.test.js`, `scripts/
 
 **Amaç:** cüzdan + ledger'ı birleştiren para döngüsü. Offline ekle → online settle → herkeste temizlenir.
 
-- [ ] Katılımda cüzdan adresini ledger'a yayınla: `{ type: 'wallet', ... }` (docs.md §8.2). (FR-3 sürekliliği)
-- [ ] "Settle": plan transfer → WDK USD₮ gönder → `payment` entry yaz (tx hash idempotency key) (FR-9, FR-11).
-- [ ] Replike olan `payment`, borcu **tüm peer'lerde** temizler.
-- [ ] UI'da online/offline durumu net; settlement bağlantıya bağlı (FR-13, claude.md offline honesty).
+Dosyalar: `server/bridge.mjs` (`doSettle`), `web/components/GroupLedger.jsx`, `scripts/verify-settle.mjs`
 
-**Done =** expense'i offline ekle → online settle et → herkes temizlendiğini görür.
+- [x] Katılımda cüzdan adresini ledger'a yayınla: `{ type: 'wallet', ... }` (`publishMembership`). (FR-3 sürekliliği)
+- [x] "Settle": plan transfer → ledger'dan alacaklı adresini çöz → WDK `sendUsdt` → `payment` entry
+      (txHash idempotency key) (FR-9, FR-11). Backend `POST /api/settle`.
+- [x] Replike olan `payment`, borcu **tüm peer'lerde** temizler — `verify-settle.mjs` ile kanıtlandı
+      (B'nin borcu A:0/B:0'a indi, aynı txHash'in retry'ı çift saymadı).
+- [x] UI'da online/offline net; "Pay in USD₮" yalnız online + senin borcun için aktif (FR-13).
+
+**Done =** expense'i offline ekle → online settle et → herkes temizlendiğini görür. Loop mekaniği
+`npm run settle:verify` PASS; gerçek on-chain gönderim Faz 1'de doğrulanan cüzdan yolu (fon gerektirir).
 
 ---
 

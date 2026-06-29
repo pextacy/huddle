@@ -41,7 +41,8 @@ const routes = {
   'POST /api/group/join': async (body) => bridge.joinGroup(body),
   'POST /api/expense': async (body) => bridge.addExpense(body),
   'POST /api/writer/approve': async (body) => bridge.approveWriter(body),
-  'POST /api/payment': async (body) => bridge.recordPayment(body)
+  'POST /api/payment': async (body) => bridge.recordPayment(body),
+  'POST /api/settle': async (body) => bridge.settle(body)
 }
 
 const server = http.createServer(async (req, res) => {

@@ -65,7 +65,7 @@ export function createBridge () {
 
   async function walletStatus () {
     await ensureWallet()
-    const net = getNetwork()
+    const net = { ...getNetwork(), explorerTxUrl: NETWORK.explorerTxUrl, explorerAddressUrl: NETWORK.explorerAddressUrl }
     if (!wallet) return { ok: false, error: walletError, network: net }
     let usdt = null; let gas = null; let online = true
     try {
@@ -186,7 +186,7 @@ export function createBridge () {
     return groupState()
   }
 
-  /** Phase 4 will wire the real on-chain settle; here we expose the plan + record helper. */
+  /** Record a payment entry (after an on-chain transfer). Idempotent on txHash downstream. */
   async function doRecordPayment ({ from, to, amountMinor, txHash }) {
     if (!ledger) throw new Error('No active group.')
     const entry = makePayment({ id: b4a.toString(crypto.randomBytes(8), 'hex'), from, to, amountMinor: Number(amountMinor), txHash, ts: Date.now() })
@@ -194,6 +194,36 @@ export function createBridge () {
     await ledger.base.update()
     emit()
     return groupState()
+  }
+
+  /** Resolve a member's published on-chain address from the ledger. */
+  async function creditorAddress (memberId) {
+    const entries = await readLedger(ledger.base)
+    let addr = null
+    for (const e of entries) if (e.type === 'wallet' && e.member === memberId && e.address) addr = e.address
+    return addr
+  }
+
+  /**
+   * Phase 4 — the loop: settle a debt on-chain, then record it in the ledger so every peer
+   * sees it cleared. `to` is the creditor's memberId; `amountMinor` is ledger minor units.
+   * Online-only (FR-13): the USD₮ transfer writes to a blockchain.
+   */
+  async function doSettle ({ to, amountMinor }) {
+    if (!ledger) throw new Error('No active group.')
+    if (!isWritable(ledger.base)) throw new Error('This device is not an authorized writer yet.')
+    await ensureWallet()
+    if (!wallet) throw new Error(`Wallet unavailable: ${walletError || 'unknown'}`)
+
+    const address = await creditorAddress(to)
+    if (!address) throw new Error('Creditor has not published a wallet address yet.')
+
+    // Real on-chain USD₮ transfer (needs the internet — this is the online-only step).
+    const { hash } = await sendUsdt(wallet, address, Number(amountMinor))
+
+    // Record the settlement so the debt clears for everyone once replicated. Idempotent on hash.
+    await doRecordPayment({ from: memberId, to, amountMinor: Number(amountMinor), txHash: hash })
+    return { txHash: hash, state: await groupState() }
   }
 
   async function groupState () {
@@ -251,6 +281,7 @@ export function createBridge () {
     addExpense: doAddExpense,
     approveWriter: doApproveWriter,
     recordPayment: doRecordPayment,
+    settle: doSettle,
     subscribe,
     restore,
     teardown: teardownLedger

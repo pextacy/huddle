@@ -14,13 +14,26 @@ function nameOf (group, id) {
   return group.members?.[id]?.name || id
 }
 
-export default function GroupLedger ({ group }) {
+export default function GroupLedger ({ group, wallet }) {
   const [writerKey, setWriterKey] = useState('')
   const [copied, setCopied] = useState(false)
   const [err, setErr] = useState(null)
+  const [settling, setSettling] = useState(null) // index being settled
+  const [settleErr, setSettleErr] = useState(null)
+  const [lastTx, setLastTx] = useState(null)
 
   const me = group.me
   const myNet = group.balances?.[me.memberId] ?? 0
+  const canSettle = wallet?.ok && wallet?.online
+  const explorerTx = wallet?.network?.explorerTxUrl
+
+  async function settle (t, i) {
+    setSettling(i); setSettleErr(null)
+    try {
+      const res = await post('settle', { to: t.to, amountMinor: t.amountMinor })
+      setLastTx(res.txHash)
+    } catch (e) { setSettleErr(e.message) } finally { setSettling(null) }
+  }
 
   async function approve () {
     setErr(null)
@@ -71,21 +84,47 @@ export default function GroupLedger ({ group }) {
       </div>
 
       <div className="card">
-        <h2>Settle up — minimal transfers</h2>
+        <div className="row spread">
+          <h2 style={{ margin: 0 }}>Settle up — minimal transfers</h2>
+          <span className={canSettle ? 'badge status-online' : 'badge status-offline'}>
+            {canSettle ? 'online' : 'offline'}
+          </span>
+        </div>
         {(group.plan || []).length === 0 ? (
           <span className="muted small">All settled — no transfers needed.</span>
         ) : (
-          <div className="list">
-            {group.plan.map((t, i) => (
-              <div key={i} className="item">
-                <div className="meta">
-                  <span>{nameOf(group, t.from)} → {nameOf(group, t.to)}</span>
-                  <span className="muted small">{t.from === me.memberId ? 'you pay' : ''}</span>
+          <div className="list" style={{ marginTop: 12 }}>
+            {group.plan.map((t, i) => {
+              const mine = t.from === me.memberId
+              return (
+                <div key={i} className="item">
+                  <div className="meta">
+                    <span>{nameOf(group, t.from)} → {nameOf(group, t.to)}</span>
+                    <span className="muted small">{mine ? 'you pay' : ''} {fmt(t.amountMinor)} USD₮</span>
+                  </div>
+                  {mine
+                    ? (
+                      <button
+                        className="btn small"
+                        disabled={!canSettle || settling !== null}
+                        onClick={() => settle(t, i)}
+                        title={canSettle ? 'Send USD₮ on-chain' : 'Needs internet to settle on-chain'}
+                      >
+                        {settling === i ? 'Sending…' : 'Pay in USD₮'}
+                      </button>
+                      )
+                    : <span className="status-online">{fmt(t.amountMinor)} USD₮</span>}
                 </div>
-                <span className="status-online">{fmt(t.amountMinor)} USD₮</span>
+              )
+            })}
+            {!canSettle && <div className="notice">Settlement needs the internet — the USD₮ transfer writes to a blockchain. Everything else works offline.</div>}
+            {settleErr && <div className="error">{settleErr}</div>}
+            {lastTx && (
+              <div className="notice">
+                Sent! tx{' '}
+                {explorerTx ? <a href={`${explorerTx}${lastTx}`} target="_blank" rel="noreferrer" className="mono" style={{ color: 'var(--accent)' }}>{lastTx.slice(0, 18)}…</a> : <span className="mono">{lastTx.slice(0, 18)}…</span>}
               </div>
-            ))}
-            <div className="notice">On-chain settlement (Pay in USD₮) lands in Phase 4. The plan above is computed offline from the P2P ledger.</div>
+            )}
           </div>
         )}
       </div>

@@ -36,7 +36,7 @@ export default function Page () {
       {state ? (
         <>
           <WalletCard wallet={state.wallet} />
-          {state.group?.active ? <GroupLedger group={state.group} /> : <Onboarding />}
+          {state.group?.active ? <GroupLedger group={state.group} wallet={state.wallet} /> : <Onboarding />}
         </>
       ) : (
         connected && <div className="card"><span className="muted">Loading…</span></div>
