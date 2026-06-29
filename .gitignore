@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Pear / Bare local-first storage (never commit ledger/wallet state)
+.pear/
+store/
+storage/
+
+# Secrets — seed phrases live only in device secure storage, never in the repo
+*.seed
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+*.log
