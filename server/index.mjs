@@ -73,6 +73,7 @@ const routes = {
   'POST /api/settle/quote': async (body) => bridge.quoteSettle(body),
   'POST /api/settle': async (body) => bridge.settle(body),
   'POST /api/settle/cash': async (body) => bridge.cashSettle(body),
+  'POST /api/settle/received': async (body) => bridge.recordReceived(body),
   'POST /api/pro/subscribe': async (body) => bridge.subscribePro(body),
   'POST /api/network': async (body) => bridge.setNetwork(body)
 }

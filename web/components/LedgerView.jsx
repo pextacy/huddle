@@ -32,6 +32,7 @@ export default function LedgerView ({ group, wallet, groups, showAdd, setShowAdd
   const [nudging, setNudging] = useState(null)
   const [nudged, setNudged] = useState({})
   const [stopping, setStopping] = useState(null)
+  const [receiving, setReceiving] = useState(null)
 
   // A stable idempotency key per pending transfer, minted once and reused across retries until the
   // debt is actually recorded. Without this, a retry after a lost response (the transfer already
@@ -89,6 +90,12 @@ export default function LedgerView ({ group, wallet, groups, showAdd, setShowAdd
       const res = await post('settle/cash', { to: t.to, amountMinor: t.amountMinor })
       setLastSettle({ cash: true, ...res })
     } catch (e) { setSettleErr(e.message) } finally { setCashing(null) }
+  }
+  async function recordReceived (t) {
+    const k = `${t.from}-${t.to}`
+    setReceiving(k); setSettleErr(null)
+    try { await post('settle/received', { from: t.from, amountMinor: t.amountMinor }) }
+    catch (e) { setSettleErr(e.message) } finally { setReceiving(null) }
   }
   async function stopRecurring (id) {
     if (typeof window !== 'undefined' && !window.confirm('Stop this recurring expense? Past occurrences stay; no new ones are added.')) return
@@ -217,10 +224,15 @@ export default function LedgerView ({ group, wallet, groups, showAdd, setShowAdd
                 <div className="m-who"><div className="m-who-name">{nameOf(group, t.from)} → {nameOf(group, t.to)}</div><div className="m-who-sub">Pending settlement</div></div>
                 <div className="row" style={{ gap: 10 }}>
                   <span className="m-amt">{fmt(t.amountMinor)}</span>
-                  {owedToMe && (
-                    <button className="lc-btn lc-btn-ghost lc-btn-sm" disabled={nudging === k || nudged[k] || !me.writable} onClick={() => nudge(t)}>
-                      <Icon name="bell" size={14} /> {nudging === k ? '…' : nudged[k] ? 'Sent' : 'Remind'}
-                    </button>
+                  {owedToMe && me.writable && (
+                    <>
+                      <button className="lc-btn lc-btn-ghost lc-btn-sm" disabled={receiving === k} onClick={() => recordReceived(t)}>
+                        {receiving === k ? '…' : 'Mark received'}
+                      </button>
+                      <button className="lc-btn lc-btn-ghost lc-btn-sm" disabled={nudging === k || nudged[k]} onClick={() => nudge(t)}>
+                        <Icon name="bell" size={14} /> {nudging === k ? '…' : nudged[k] ? 'Sent' : 'Remind'}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

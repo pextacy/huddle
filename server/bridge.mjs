@@ -708,6 +708,30 @@ export function createBridge (opts = {}) {
     return groupState()
   }
 
+  /**
+   * Record a cash payment RECEIVED from a debtor (Splitwise lets either party log a settlement). I
+   * am the creditor (`to = me`); the debtor paid me off-chain. Only valid when they actually owe me.
+   */
+  async function doRecordReceived ({ from, amountMinor, note }) {
+    requireWriter()
+    if (!isNonEmptyStr(from)) throw new Error('The member who paid you is required.')
+    if (from === memberId) throw new Error('Cannot record a payment from yourself.')
+    const amt = assertPosIntMinor(amountMinor, 'received amount')
+    const net = computeBalances(await readLedger(ledger.base))
+    if ((net[from] ?? 0) >= 0) throw new Error('That member does not owe you anything.')
+    await appendEntry(ledger.base, makeCashPayment({
+      id: b4a.toString(crypto.randomBytes(8), 'hex'),
+      from,
+      to: memberId,
+      amountMinor: amt,
+      ...(isNonEmptyStr(note) ? { note: note.slice(0, 140) } : {}),
+      ts: Date.now()
+    }))
+    await ledger.base.update()
+    emit()
+    return groupState()
+  }
+
   async function doApproveWriter ({ writerKey }) {
     if (!ledger) throw new Error('No active group.')
     if (!isWritable(ledger.base)) throw new Error('Only an authorized writer can approve members.')
@@ -903,6 +927,7 @@ export function createBridge (opts = {}) {
     stopRecurring: doStopRecurring,
     rates: doRates,
     cashSettle: doCashSettle,
+    recordReceived: doRecordReceived,
     approveWriter: doApproveWriter,
     settle: doSettle,
     quoteSettle: doQuoteSettle,

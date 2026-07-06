@@ -337,3 +337,26 @@ test('custom (unequal) split is accepted and reflected in balances', async () =>
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('recordReceived logs a cash payment from a debtor and clears their debt', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sk-bridge-recv-'))
+  const bridge = createBridge({ baseDir: dir, enableSwarm: false, enableWallet: false })
+  try {
+    const created = await bridge.createGroup({ name: 'Trip', member: 'Me' })
+    const me = created.me.memberId
+    // I fronted 1000 split with bob -> bob owes me 500.
+    await bridge.addExpense({ payer: me, amountMinor: 1000, description: 'Tickets', participants: [me, 'bob'] })
+    const state = await bridge.recordReceived({ from: 'bob', amountMinor: 500 })
+    const pay = state.entries.find((e) => e.type === 'payment')
+    assert.equal(pay.from, 'bob')
+    assert.equal(pay.to, me)
+    assert.equal(pay.method, 'cash')
+    assert.equal(state.balances[me] ?? 0, 0, 'debt cleared')
+    assert.equal(state.balances.bob ?? 0, 0)
+    // Cannot record a payment from someone who does not owe you.
+    await assert.rejects(() => bridge.recordReceived({ from: 'carol', amountMinor: 100 }), /does not owe/)
+  } finally {
+    await bridge.teardown()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
