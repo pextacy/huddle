@@ -62,7 +62,10 @@ function validateAddWriter (e) {
 function validateWallet (e) {
   if (!isNonEmptyString(e.member)) fail('wallet.member required')
   if (!isNonEmptyString(e.chain)) fail('wallet.chain required')
-  if (!isNonEmptyString(e.address)) fail('wallet.address required')
+  // `address` is a presence marker + address publish: it may be null/absent (member is here but
+  // has no wallet address yet — e.g. offline or wallet unavailable), but if present it must be a
+  // non-empty string. Consumers (creditorAddress) already require a real address before settling.
+  if (e.address != null && !isNonEmptyString(e.address)) fail('wallet.address must be a non-empty string when present')
   return e
 }
 

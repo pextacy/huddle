@@ -34,6 +34,27 @@ test('joinGroup rejects malformed invite codes', () => {
   assert.throws(() => joinGroup(''))
 })
 
+test('apply drops malformed/malicious entries so peers cannot corrupt balances', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sk-led-guard-'))
+  try {
+    const store = new Corestore(dir)
+    const base = await openLedger(store, null)
+    // Simulate a malicious/buggy peer appending raw entries that bypass the make* validators.
+    await base.append({ type: 'expense', id: 'bad', payer: 'A', amountMinor: -1000000, currency: 'USD', participants: ['A', 'B'], split: 'equal', ts: 1 })
+    await base.append({ type: 'expense', id: 'huge', payer: 'A', amountMinor: 'not-a-number', currency: 'USD', participants: ['A'], split: 'equal', ts: 2 })
+    await base.append({ type: 'wat', id: 'x', ts: 3 }) // unknown type
+    // A well-formed entry still lands.
+    await appendEntry(base, makeExpense({ id: 'ok', payer: 'A', amountMinor: 1000, participants: ['A', 'B'], ts: 4 }))
+
+    const view = await readLedger(base)
+    const ids = view.filter((e) => e.type === 'expense').map((e) => e.id)
+    assert.deepEqual(ids, ['ok'], 'only the valid expense entered the view')
+    await base.close(); await store.close()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('single-peer ledger persists entries across reopen', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'sk-led-'))
   try {

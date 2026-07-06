@@ -15,6 +15,7 @@
 import Autobase from 'autobase'
 import Hyperbee from 'hyperbee'
 import b4a from 'b4a'
+import { validateEntry } from '../domain/entries.js'
 
 /** Pad a timestamp so string keys sort in chronological order. */
 function tsKey (ts) {
@@ -39,13 +40,21 @@ async function apply (nodes, view, host) {
     const op = node.value
     if (!op || typeof op !== 'object') continue
 
-    // Authorize a new writer (a member joining the group).
+    // Authorize a new writer (a member joining the group). Only act on a well-formed hex key —
+    // ignore a malformed authorize op rather than letting b4a.from throw and stall the base.
     if (op.type === 'addWriter') {
-      await host.addWriter(b4a.from(op.key, 'hex'), { indexer: true })
+      if (typeof op.key === 'string' && /^[0-9a-fA-F]+$/.test(op.key) && op.key.length % 2 === 0) {
+        try { await host.addWriter(b4a.from(op.key, 'hex'), { indexer: true }) } catch { /* skip bad key */ }
+      }
       continue
     }
 
-    // Everything else is a ledger entry, stored under a deterministic key.
+    // Validate EVERY replicated entry before it enters the shared view. Peers are semi-trusted
+    // writers; a malformed or malicious entry (negative/huge amount, wrong type, bad split) must
+    // never reach computeBalances and corrupt the group's balances. validateEntry is pure and
+    // deterministic, so every peer independently drops exactly the same invalid entries and the
+    // views stay byte-for-byte identical (docs/claude.md determinism + money correctness).
+    try { validateEntry(op) } catch { continue }
     await view.put(entryKey(op), op)
   }
 }
