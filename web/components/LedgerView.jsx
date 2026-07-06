@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { post } from '../lib/api'
-import { fmt, fmtSigned, nameOf, initials } from '../lib/format'
+import { fmt, fmtSigned, nameOf, initials, shortId } from '../lib/format'
 import AddExpense from './AddExpense'
 import MobileHeader from './MobileHeader'
 import GroupSwitcher from './GroupSwitcher'
@@ -252,6 +252,8 @@ export default function LedgerView ({ group, wallet, groups, showAdd, setShowAdd
           )}
           {myTransfers.map((t, i) => {
             const estFee = pro?.active ? 0 : clientFee(t.amountMinor, fee)
+            const payeeAddr = group.members?.[t.to]?.address
+            const addrUrl = wallet?.network?.explorerAddressUrl
             return (
               <div key={`${t.from}-${t.to}-${t.amountMinor}`} className="m-card accent">
                 <div className="row spread">
@@ -265,6 +267,17 @@ export default function LedgerView ({ group, wallet, groups, showAdd, setShowAdd
                     {pro?.active && fee?.enabled && <div className="credit small mono">Pro · no fee</div>}
                   </div>
                 </div>
+                {/* Show the on-chain recipient so the payer can VERIFY it before moving real USD₮
+                    (addresses are published P2P and aren't cryptographically bound to a member). */}
+                {payeeAddr && (
+                  <div className="m-settle-addr">
+                    <Icon name="wallet" size={13} />
+                    {addrUrl
+                      ? <a className="lc-link mono" href={`${addrUrl}${payeeAddr}`} target="_blank" rel="noreferrer">{shortId(payeeAddr)}</a>
+                      : <span className="mono">{shortId(payeeAddr)}</span>}
+                    <span className="muted small">— verify this is {nameOf(group, t.to)}’s address</span>
+                  </div>
+                )}
                 <hr className="m-settle-line" />
                 <button className="lc-btn lc-btn-primary lc-btn-block lc-btn-lg" disabled={!canSettle || settling !== null || cashing !== null} onClick={() => settle(t, i)}>
                   <Icon name="send" size={17} /> {settling === i ? 'Sending…' : 'Pay in USD₮'}
