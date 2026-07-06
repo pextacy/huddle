@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { post } from '../lib/api'
+import { useEffect, useState } from 'react'
+import { post, getSummary } from '../lib/api'
+import { fmtSigned } from '../lib/format'
 import Icon from './Icon'
 
 /**
@@ -17,7 +18,17 @@ export default function GroupSwitcher ({ groups, activeId, activeName }) {
   const [invite, setInvite] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [summary, setSummary] = useState(null)
   const list = groups || []
+
+  // Load the cross-group balance summary when the sheet opens on the Switch tab (best-effort).
+  useEffect(() => {
+    if (!open || tab !== 'list') return
+    let alive = true
+    getSummary().then((s) => { if (alive) setSummary(s) }).catch(() => {})
+    return () => { alive = false }
+  }, [open, tab])
+  const netOf = (id) => summary?.groups?.find((g) => g.id === id)?.netMinor
 
   async function run (fn) {
     setBusy(true); setError(null)
@@ -55,16 +66,28 @@ export default function GroupSwitcher ({ groups, activeId, activeName }) {
 
             {tab === 'list' && (
               <div className="m-stack">
-                {list.length === 0 && <div className="lc-empty">No groups yet.</div>}
-                {list.map((g) => (
-                  <div key={g.id} className={`m-brow ${g.active ? 'accent' : ''}`}>
-                    <button className="m-who" style={{ textAlign: 'left', background: 'none', border: 0, cursor: 'pointer', color: 'inherit' }} onClick={() => pickGroup(g.id)} disabled={busy}>
-                      <div className="m-who-name">{g.name}{g.active ? ' · active' : ''}</div>
-                      <div className="m-who-sub">{g.active ? 'Live now' : 'Tap to switch'}</div>
-                    </button>
-                    {!g.active && <button className="lc-linkbtn danger" disabled={busy} onClick={() => leave(g.id, g.name)}>Leave</button>}
+                {summary && (
+                  <div className="m-brow accent">
+                    <div className="m-who"><div className="m-who-name">Overall</div><div className="m-who-sub">across all groups</div></div>
+                    <span className={`m-amt ${summary.overallMinor < 0 ? 'debt' : 'credit'}`}>{fmtSigned(summary.overallMinor)}</span>
                   </div>
-                ))}
+                )}
+                {list.length === 0 && <div className="lc-empty">No groups yet.</div>}
+                {list.map((g) => {
+                  const net = netOf(g.id)
+                  return (
+                    <div key={g.id} className={`m-brow ${g.active ? 'accent' : ''}`}>
+                      <button className="m-who" style={{ textAlign: 'left', background: 'none', border: 0, cursor: 'pointer', color: 'inherit' }} onClick={() => pickGroup(g.id)} disabled={busy}>
+                        <div className="m-who-name">{g.name}{g.active ? ' · active' : ''}</div>
+                        <div className="m-who-sub">{g.active ? 'Live now' : 'Tap to switch'}</div>
+                      </button>
+                      <div className="row" style={{ gap: 10 }}>
+                        {net != null && <span className={`m-amt ${net < 0 ? 'debt' : net > 0 ? 'credit' : 'muted'}`}>{fmtSigned(net)}</span>}
+                        {!g.active && <button className="lc-linkbtn danger" disabled={busy} onClick={() => leave(g.id, g.name)}>Leave</button>}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
 

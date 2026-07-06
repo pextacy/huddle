@@ -16,6 +16,12 @@ export async function getRates () {
   return r.json()
 }
 
+/** This device's net balance across every group (overall + per group), in minor units. */
+export async function getSummary () {
+  const r = await fetch(`${BASE}/api/summary`, { cache: 'no-store' })
+  return r.json()
+}
+
 export async function post (path, body) {
   const r = await fetch(`${BASE}/api/${path}`, {
     method: 'POST',

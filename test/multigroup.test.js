@@ -95,3 +95,27 @@ test('a legacy single group.json install migrates into the registry', async () =
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('groupsSummary reports this device net per group + overall (inactive read read-only)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sk-mg-sum-'))
+  const bridge = createBridge({ baseDir: dir, enableSwarm: false, enableWallet: false })
+  try {
+    // Trip: I front 1000 split with bob -> I'm owed +500.
+    const trip = await bridge.createGroup({ name: 'Trip', member: 'Me' })
+    const tripMe = trip.me.memberId
+    await bridge.addExpense({ payer: tripMe, amountMinor: 1000, description: 'Tickets', participants: [tripMe, 'bob'] })
+    // Flat (now active): bob fronts 2000 split with me -> I owe -1000.
+    const flat = await bridge.createGroup({ name: 'Flat', member: 'Me' })
+    const flatMe = flat.me.memberId
+    await bridge.addExpense({ payer: 'bob', amountMinor: 2000, description: 'Rent', participants: [flatMe, 'bob'] })
+
+    const sum = await bridge.groupsSummary()
+    const byName = Object.fromEntries(sum.groups.map((g) => [g.name, g.netMinor]))
+    assert.equal(byName.Trip, 500, 'owed in Trip (read from its store read-only)')
+    assert.equal(byName.Flat, -1000, 'owes in Flat (live active ledger)')
+    assert.equal(sum.overallMinor, -500, 'overall net across groups')
+  } finally {
+    await bridge.teardown()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

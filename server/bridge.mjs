@@ -898,6 +898,38 @@ export function createBridge (opts = {}) {
     return { wallet: await walletStatus(), group: await groupState(), groups: groupList() }
   }
 
+  /**
+   * This device's net balance in EVERY group it belongs to (Splitwise's overall "you owe / are
+   * owed" home number). The active group is read from its live ledger; each inactive group is
+   * opened read-only from its persisted Corestore, computed, and closed. Best-effort per group —
+   * a group that fails to open reports `netMinor: null` rather than sinking the whole summary.
+   */
+  async function doGroupsSummary () {
+    const reg = loadRegistry()
+    const groups = []
+    let overallMinor = 0
+    for (const meta of reg.groups) {
+      try {
+        let net
+        if (ledger && ledger.group.id === meta.id) {
+          net = computeBalances(await readLedger(ledger.base))[memberId] ?? 0
+        } else {
+          const store = new Corestore(join(baseDir, 'store', meta.id))
+          try {
+            const base = await openLedger(store, meta.bootstrap || null)
+            net = computeBalances(await readLedger(base))[meta.memberId] ?? 0
+            await base.close()
+          } finally { await store.close() }
+        }
+        overallMinor += net
+        groups.push({ id: meta.id, name: meta.name, active: meta.id === reg.activeId, netMinor: net })
+      } catch {
+        groups.push({ id: meta.id, name: meta.name, active: meta.id === reg.activeId, netMinor: null })
+      }
+    }
+    return { overallMinor, groups }
+  }
+
   async function restore () {
     const meta = loadGroupMeta()
     if (!meta) return
@@ -918,6 +950,7 @@ export function createBridge (opts = {}) {
     joinGroup: doJoinGroup,
     switchGroup: doSwitchGroup,
     leaveGroup: doLeaveGroup,
+    groupsSummary: doGroupsSummary,
     addExpense: doAddExpense,
     editExpense: doEditExpense,
     voidExpense: doVoidExpense,

@@ -62,6 +62,7 @@ const routes = {
   'POST /api/group/join': async (body) => bridge.joinGroup(body),
   'POST /api/group/switch': async (body) => bridge.switchGroup(body),
   'POST /api/group/leave': async (body) => bridge.leaveGroup(body),
+  'GET /api/summary': async () => bridge.groupsSummary(),
   'POST /api/expense': async (body) => bridge.addExpense(body),
   'POST /api/expense/edit': async (body) => bridge.editExpense(body),
   'POST /api/expense/delete': async (body) => bridge.voidExpense(body),
