@@ -6,8 +6,10 @@ writing code. It encodes the non-negotiable conventions for SplitKick+.
 ## Project
 
 SplitKick+ is an **offline-first group expense splitter with self-custodial USD₮ settlement**,
-built for the Tether Developers Cup. It is a **single Bare/Pear app** that combines a
-peer-to-peer ledger (Holepunch) with a wallet (Tether WDK).
+built for the Tether Developers Cup. It combines a peer-to-peer ledger (Holepunch) with a
+wallet (Tether WDK), delivered as a **Node backend (`server/`) + Next.js frontend (`web/`)** —
+the Holepunch/WDK modules run in Node and the UI talks to them over HTTP/SSE. (The original
+single-Bare/Pear-app packaging was dropped when Pear v2 removed `pear run`.)
 
 - **Declared track:** WDK (Wallets). WDK moves the money and is load-bearing.
 - **Differentiator:** Pears P2P provides the entire offline ledger (not a logo).
@@ -17,7 +19,7 @@ See `docs.md` for architecture, `prd.md` for requirements, `plan.md` for the bui
 
 ## Tech stack
 
-- Runtime: **Pear / Bare** (`pear` CLI). The app runs on Bare, not plain Node.
+- Runtime: **Node** (backend `server/`, scripts, tests) + **Next.js/React** (frontend `web/`).
 - P2P: `hyperswarm`, `corestore`, `autobase`, `hyperbee`, `hypercore-crypto`, `b4a`.
 - Wallet: `@tetherto/wdk`, `@tetherto/wdk-wallet-evm`.
 - Language: JavaScript (ESM, `import`/`export`). TypeScript types via JSDoc where useful.
@@ -28,24 +30,29 @@ exists — verify against the installed version's docs/README before using it.
 ## Repository layout (target)
 
 ```
-/                      app entry (pear app), package.json
+/                      package.json
+/server                bridge.mjs (live ledger + wallet), index.mjs (HTTP/SSE API)
+/web                   Next.js frontend (app/, components/, lib/)
 /src
   /p2p                 swarm.js, ledger.js (Autobase+Hyperbee), topic.js
-  /wallet              wdk.js (init, address, balance, sendUsdt)
-  /domain             balances.js, settlement.js, entries.js (pure, deterministic)
-  /ui                  views/components (no gradients; see rules)
-/test                  domain tests (pure functions first)
+  /wallet              wdk.js (init, address, balance, sendUsdt), units.js, seed-store.js, config.js
+  /domain              balances.js, settlement.js, entries.js, fees.js, pro.js, insights.js (pure, deterministic)
+  /ui                  wallet CLI preview views (no gradients; see rules)
+/scripts               dev.mjs (backend + web together), wallet.mjs, verify-*.mjs
+/test                  domain tests (pure functions first) + p2p/bridge/wallet tests
 docs.md prd.md plan.md
 ```
 
 ## Commands
 
 ```bash
-npm install                 # install deps (run after every dependency change)
-pear run --dev .            # run the app in dev
-pear stage <channel>        # stage a release build
-pear release <channel>      # mark a release
-npm test                    # run the deterministic domain tests
+npm install                 # backend deps (run after every dependency change)
+(cd web && npm install)     # frontend deps
+npm run app                 # run backend :8787 + Next.js frontend :3000 together
+npm run server              # backend only
+npm test                    # run the deterministic domain/p2p/wallet/bridge tests
+npm run p2p:verify          # two real peers converge + restart-safe
+npm run settle:verify       # settle loop clears the debt for every peer
 ```
 
 ## Hard rules (do not violate)

@@ -53,7 +53,7 @@ logo — it is the whole offline ledger.
 
 | Package | Role |
 |---|---|
-| `pear` (Pear Runtime / CLI) | App runtime, dev, and packaging (`pear init`, `pear run`, `pear stage`, `pear release`) |
+| Node + Next.js | App runtime: the Holepunch/WDK modules run in a Node backend (`server/`), the UI is Next.js (`web/`). (Pear packaging was dropped — Pear v2 removed `pear run`.) |
 | `hyperswarm` | Peer discovery + encrypted connections by topic |
 | `hypercore-crypto` | Key pairs, hashing, deriving the 32-byte group topic |
 | `corestore` | Manages the collection of Hypercores per group |

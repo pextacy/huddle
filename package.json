@@ -1,30 +1,18 @@
 {
   "name": "splitkick-plus",
   "version": "0.1.0",
-  "description": "Offline-first group expense splitter with self-custodial USD₮ settlement. One Bare/Pear app: P2P ledger (Holepunch) + wallet (Tether WDK).",
+  "description": "Offline-first group expense splitter with self-custodial USD₮ settlement: P2P ledger (Holepunch) + wallet (Tether WDK), Node backend + Next.js frontend.",
   "type": "module",
-  "main": "index.html",
+  "main": "server/index.mjs",
   "license": "MIT",
   "scripts": {
     "test": "node --test 'test/**/*.test.js'",
-    "dev": "pear run --dev .",
-    "stage": "pear stage dev",
-    "release": "pear release dev",
     "wallet:status": "node scripts/wallet.mjs status",
     "wallet:send": "node scripts/wallet.mjs send",
     "p2p:verify": "node scripts/verify-p2p.mjs",
     "settle:verify": "node scripts/verify-settle.mjs",
     "server": "node server/index.mjs",
     "app": "node scripts/dev.mjs"
-  },
-  "pear": {
-    "name": "splitkick-plus",
-    "type": "desktop",
-    "gui": {
-      "backgroundColor": "#0b0b0b",
-      "height": 760,
-      "width": 460
-    }
   },
   "dependencies": {
     "@tetherto/wdk": "1.0.0-beta.12",
@@ -36,8 +24,5 @@
     "hypercore-crypto": "3.7.0",
     "hyperswarm": "4.17.0",
     "qrcode-generator": "2.0.4"
-  },
-  "devDependencies": {
-    "pear-interface": "1.1.0"
   }
 }

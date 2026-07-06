@@ -22,3 +22,6 @@ wallet-preview.html
 # OS / editor
 .DS_Store
 *.log
+
+# Local AI-assistant session state
+.claude/
