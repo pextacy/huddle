@@ -25,6 +25,7 @@ import { groupInsights } from '../src/domain/insights.js'
 import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment, makeComment, makeReminder, makeRecurring, COMMENT_MAX } from '../src/domain/entries.js'
 import { latestTemplates, dueOccurrences, materializeOccurrence } from '../src/domain/recurring.js'
 import { convertMinor, isCurrency } from '../src/domain/currency.js'
+import { buildNotifications } from '../src/domain/notifications.js'
 import { computeSettlement, platformRevenue } from '../src/domain/fees.js'
 import { isProActive, extendPro, MAX_MONTHS } from '../src/domain/pro.js'
 import { generateSeed, openWallet, closeWallet, getNativeBalance, getUsdtBalance, sendUsdt, getNetwork, NETWORK, USDT } from '../src/wallet/wdk.js'
@@ -881,6 +882,7 @@ export function createBridge (opts = {}) {
       revenue: platformRevenue(entries),
       insights: groupInsights(entries),
       recurring: latestTemplates(entries).filter((t) => t.active !== false),
+      notifications: buildNotifications(entries, memberId),
       peers: ledger.swarm ? ledger.swarm.swarm.connections.size : 0
     }
   }

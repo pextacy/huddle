@@ -6,6 +6,7 @@ import { fmt, fmtSigned, nameOf, initials } from '../lib/format'
 import AddExpense from './AddExpense'
 import MobileHeader from './MobileHeader'
 import GroupSwitcher from './GroupSwitcher'
+import Notifications from './Notifications'
 import Qr from './Qr'
 import Icon from './Icon'
 
@@ -116,7 +117,10 @@ export default function LedgerView ({ group, wallet, groups, showAdd, setShowAdd
   return (
     <>
       <MobileHeader title={group.group.name} online={online} showWifi
-        rightSlot={<GroupSwitcher groups={groups?.groups} activeId={groups?.activeId ?? group.group.id} activeName={group.group.name} />}
+        rightSlot={<>
+          <Notifications notifications={group.notifications} group={group} groupId={group.group.id} />
+          <GroupSwitcher groups={groups?.groups} activeId={groups?.activeId ?? group.group.id} activeName={group.group.name} />
+        </>}
       />
 
       {showAdd && <div style={{ marginBottom: 12 }}><AddExpense group={group} onClose={() => setShowAdd(false)} /></div>}

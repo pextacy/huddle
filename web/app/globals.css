@@ -191,6 +191,10 @@ body {
 .m-comment-form .lc-input { flex: 1; }
 .m-comment-form .lc-btn-sm { flex-shrink: 0; }
 
+/* ── notifications bell ──────────────────────────────────────── */
+.m-bell { position: relative; display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
+.m-bell-badge { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--debt); color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: center; border: 2px solid var(--panel); }
+
 /* ── group switcher (multi-group) ────────────────────────────── */
 .m-groupbtn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); color: var(--text); font-size: 12px; font-weight: 700; cursor: pointer; max-width: 140px; }
 .m-groupbtn-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
