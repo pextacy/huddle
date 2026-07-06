@@ -11,6 +11,8 @@
  * never calls Date.now(), so the same inputs always produce the same entry on every peer.
  */
 
+import { convertMinor, isCurrency } from './currency.js'
+
 /** @typedef {'addWriter'|'wallet'|'expense'|'payment'|'fee'|'void'|'comment'|'reminder'|'recurring'} EntryType */
 
 export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void', 'comment', 'reminder', 'recurring'])
@@ -76,8 +78,25 @@ function validateExpense (e) {
   if (!e.participants.every(isNonEmptyString)) fail('expense.participants must be strings')
   if (new Set(e.participants).size !== e.participants.length) fail('expense.participants must be unique')
   if (!isPosInt(e.ts)) fail('expense.ts must be a positive integer timestamp')
+  validateForeignAmount(e)
   validateSplit(e)
   return e
+}
+
+/**
+ * Validate the optional foreign-currency trio on an expense. When an expense was entered in a
+ * currency other than the group's base, it carries `origCurrency` + `origAmountMinor` + `rate`
+ * (origin→base micros); `amountMinor` (the base amount used by balances) MUST equal the exact
+ * conversion, so history stays deterministic and can't be silently rewritten. All-or-nothing.
+ */
+function validateForeignAmount (e) {
+  const any = e.origCurrency !== undefined || e.origAmountMinor !== undefined || e.rate !== undefined
+  if (!any) return
+  if (!isCurrency(e.origCurrency)) fail('expense.origCurrency must be a supported currency code')
+  if (!isPosInt(e.origAmountMinor)) fail('expense.origAmountMinor must be a positive integer (minor units)')
+  if (!isPosInt(e.rate)) fail('expense.rate must be a positive integer (micros)')
+  const expected = convertMinor(e.origAmountMinor, e.rate)
+  if (e.amountMinor !== expected) fail(`expense.amountMinor (${e.amountMinor}) must equal the converted origin amount (${expected})`)
 }
 
 /**

@@ -9,6 +9,14 @@ import AddExpense from './AddExpense'
 import CommentThread from './CommentThread'
 import Icon from './Icon'
 import { CATEGORIES } from '../lib/categories'
+import { symbolOf } from '../lib/currency'
+
+// "€45.00" for a foreign-currency expense's original amount (2dp), else null.
+function origLabel (e) {
+  if (!e.origCurrency || e.origCurrency === 'USD' || !e.origAmountMinor) return null
+  const abs = Math.abs(e.origAmountMinor)
+  return `${symbolOf(e.origCurrency)}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+}
 
 // Group entries by day label (Today / Yesterday / date) using their ts.
 function dayKey (ts) {
@@ -116,6 +124,7 @@ export default function ActivityView ({ group, wallet }) {
             </div>
             <div className="m-act-right">
               <div className="m-act-amt" style={isVoid ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>- {fmt(e.amountMinor)}</div>
+              {origLabel(e) && <div className="m-act-status" style={{ justifyContent: 'flex-end' }}>{origLabel(e)}</div>}
               {isVoid
                 ? <div className="m-act-status"><span className="m-dot debt" />Removed</div>
                 : <div className="m-act-status"><span className="m-dot muted" />Split {e.participants?.length ?? 0}</div>}

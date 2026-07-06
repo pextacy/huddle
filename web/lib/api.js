@@ -10,6 +10,12 @@ export async function getState () {
   return r.json()
 }
 
+/** Best-effort FX rates (origin currency -> USD, in micros) to prefill a foreign-expense rate. */
+export async function getRates () {
+  const r = await fetch(`${BASE}/api/rates`, { cache: 'no-store' })
+  return r.json()
+}
+
 export async function post (path, body) {
   const r = await fetch(`${BASE}/api/${path}`, {
     method: 'POST',

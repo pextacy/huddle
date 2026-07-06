@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { post } from '../lib/api'
+import { post, getRates } from '../lib/api'
 import { fmt } from '../lib/format'
 import { CATEGORIES } from '../lib/categories'
+import { CURRENCIES, symbolOf, convertMinor, parseRate, formatRate } from '../lib/currency'
 import Icon from './Icon'
 
 // Parse a USD₮ decimal string into integer minor units (cents) without floats.
@@ -24,7 +25,16 @@ function toWeight (text) {
 
 /** Reconstruct the editor mode + prefilled fields from an existing expense entry (edit flow). */
 function fromExpense (exp) {
-  const base = { amount: fmt(exp.amountMinor), desc: exp.description || '', payer: exp.payer, category: exp.category || 'other' }
+  // A foreign expense is edited in its ORIGINAL currency/amount; a base (USD) one shows the base amount.
+  const foreign = exp.origCurrency && exp.origCurrency !== 'USD'
+  const base = {
+    amount: foreign ? fmt(exp.origAmountMinor) : fmt(exp.amountMinor),
+    desc: exp.description || '',
+    payer: exp.payer,
+    category: exp.category || 'other',
+    currency: foreign ? exp.origCurrency : 'USD',
+    rate: foreign ? formatRate(exp.rate) : ''
+  }
   if (exp.split && typeof exp.split.kind === 'string') {
     const weights = {}
     for (const [id, w] of Object.entries(exp.split.weights)) weights[id] = String(w)
@@ -48,6 +58,9 @@ export default function AddExpense ({ group, onClose, editing }) {
   const [desc, setDesc] = useState(init?.desc || '')
   const [payer, setPayer] = useState(init?.payer || me.memberId)
   const [category, setCategory] = useState(init?.category || 'tickets')
+  const [currency, setCurrency] = useState(init?.currency || 'USD')
+  const [rate, setRate] = useState(init?.rate || '')
+  const [rates, setRates] = useState(null)
   const [selected, setSelected] = useState(() => init?.selected || new Set(members.map((m) => m.id)))
   const [custom, setCustom] = useState(init?.custom || {})
   const [weights, setWeights] = useState(init?.weights || {})
@@ -77,7 +90,29 @@ export default function AddExpense ({ group, onClose, editing }) {
     setSelected(next)
   }
 
+  // Pull best-effort live FX rates once a foreign currency is selected, and prefill the rate field
+  // (still editable — the stored expense freezes whatever rate is actually used). Never blocks input.
+  useEffect(() => {
+    if (currency === 'USD' || rates) return
+    getRates().then(setRates).catch(() => {})
+  }, [currency, rates])
+  useEffect(() => {
+    if (currency === 'USD') return
+    const m = rates?.rates?.[currency]
+    if (m && !rate) setRate(formatRate(m))
+  }, [currency, rates]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const needsAmount = mode !== 'custom'
+  const foreign = needsAmount && currency !== 'USD'
+  // Live "≈ $X USD₮" preview of the foreign amount at the entered rate.
+  let convPreview = null
+  if (foreign) {
+    try {
+      const om = toMinor(amount || '0')
+      const rm = parseRate(rate || '0')
+      if (om > 0 && rm > 0) convPreview = convertMinor(om, rm)
+    } catch { convPreview = null }
+  }
 
   // Live totals for the footer readouts / validation hints.
   let customTotal = 0
@@ -88,13 +123,20 @@ export default function AddExpense ({ group, onClose, editing }) {
   async function submit () {
     setBusy(true); setError(null)
     try {
+      // Money fields: base USD sends amountMinor; a foreign currency sends the origin amount + rate
+      // and the backend converts (authoritatively) to base minor units.
+      const money = (amt) => foreign
+        ? { origCurrency: currency, origAmountMinor: amt, rate: parseRate(rate) }
+        : { amountMinor: amt }
+      if (foreign && parseRate(rate || '0') <= 0) throw new Error(`Enter the ${currency}→USD rate (e.g. 1.08)`)
+
       let payload
       if (mode === 'equal') {
         const amountMinor = toMinor(amount)
         if (amountMinor <= 0) throw new Error('Enter an amount like 50 or 12.50')
         const participants = [...selected]
         if (participants.length === 0) throw new Error('Pick at least one participant')
-        payload = { payer, amountMinor, description: desc, participants, split: 'equal', category }
+        payload = { payer, ...money(amountMinor), description: desc, participants, split: 'equal', category }
       } else if (mode === 'custom') {
         const split = {}; const participants = []; let total = 0
         for (const m of members) {
@@ -114,13 +156,13 @@ export default function AddExpense ({ group, onClose, editing }) {
         }
         if (participants.length === 0) throw new Error(`Enter at least one ${mode === 'percent' ? 'percentage' : 'share'}`)
         if (mode === 'percent' && participants.reduce((s, id) => s + w[id], 0) !== 100) throw new Error('Percentages must add up to exactly 100%')
-        payload = { payer, amountMinor, description: desc, participants, split: { kind: mode, weights: w }, category }
+        payload = { payer, ...money(amountMinor), description: desc, participants, split: { kind: mode, weights: w }, category }
       }
 
       if (editing) await post('expense/edit', { target: editing.id, ...payload })
       else if (repeat !== 'none') await post('recurring', { ...payload, cadence: repeat, anchorTs: Date.now() })
       else await post('expense', payload)
-      setAmount(''); setDesc(''); setCustom({}); setWeights({}); setRepeat('none')
+      setAmount(''); setDesc(''); setCustom({}); setWeights({}); setRepeat('none'); setRate('')
       onClose?.()
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
@@ -153,8 +195,30 @@ export default function AddExpense ({ group, onClose, editing }) {
 
         {needsAmount && (
           <div className="lc-field">
-            <label className="lc-label">{mode === 'equal' ? 'Amount (USD₮)' : 'Total amount (USD₮)'}</label>
-            <input className="lc-input mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="50.00" />
+            <label className="lc-label">{mode === 'equal' ? 'Amount' : 'Total amount'} ({symbolOf(currency)} {currency})</label>
+            <div className="row" style={{ gap: 8 }}>
+              <input className="lc-input mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="50.00" style={{ flex: 1 }} />
+              <select className="lc-select" value={currency} onChange={(e) => setCurrency(e.target.value)} style={{ width: 104, flexShrink: 0 }}>
+                {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>)}
+              </select>
+            </div>
+            {foreign && (
+              <div className="lc-rows" style={{ border: '1px solid var(--border)', borderRadius: 6, marginTop: 8, padding: 10 }}>
+                <div className="row spread" style={{ gap: 8, alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="lc-label">Rate ({currency} → USD)</label>
+                    <input className="lc-input mono" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="1.08" />
+                  </div>
+                  <button type="button" className="lc-btn lc-btn-ghost lc-btn-sm" onClick={() => { setRate(''); getRates().then((r) => { setRates(r); const m = r?.rates?.[currency]; if (m) setRate(formatRate(m)) }).catch(() => {}) }}>
+                    <Icon name="wifi" size={13} /> Live
+                  </button>
+                </div>
+                <div className="row spread small muted" style={{ marginTop: 8 }}>
+                  <span>{rates?.online === false ? 'Offline — enter the rate manually' : rates?.stale ? 'Last-known rate (offline)' : 'Balances settle in USD₮'}</span>
+                  <span className="mono">{convPreview != null ? `≈ ${fmt(convPreview)} USD₮` : '—'}</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

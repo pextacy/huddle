@@ -57,6 +57,7 @@ function readBody (req) {
 const routes = {
   'GET /api/state': async () => bridge.fullState(),
   'GET /api/wallet': async () => bridge.walletStatus(),
+  'GET /api/rates': async () => bridge.rates(),
   'POST /api/group/create': async (body) => bridge.createGroup(body),
   'POST /api/group/join': async (body) => bridge.joinGroup(body),
   'POST /api/expense': async (body) => bridge.addExpense(body),

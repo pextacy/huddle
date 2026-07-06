@@ -24,6 +24,7 @@ import { settlementPlan } from '../src/domain/settlement.js'
 import { groupInsights } from '../src/domain/insights.js'
 import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment, makeComment, makeReminder, makeRecurring, COMMENT_MAX } from '../src/domain/entries.js'
 import { latestTemplates, dueOccurrences, materializeOccurrence } from '../src/domain/recurring.js'
+import { convertMinor, isCurrency } from '../src/domain/currency.js'
 import { computeSettlement, platformRevenue } from '../src/domain/fees.js'
 import { isProActive, extendPro, MAX_MONTHS } from '../src/domain/pro.js'
 import { generateSeed, openWallet, closeWallet, getNativeBalance, getUsdtBalance, sendUsdt, getNetwork, NETWORK, USDT } from '../src/wallet/wdk.js'
@@ -71,6 +72,7 @@ export function createBridge (opts = {}) {
   const proPath = join(baseDir, 'pro.json')
   const settlesPath = join(baseDir, 'settles.json')
   const networkPath = join(baseDir, 'network.json')
+  const ratesPath = join(baseDir, 'rates.json')
 
   // Apply any persisted network choice BEFORE the wallet opens, so the first wallet connects to the
   // right chain. Falls back to the SPLITKICK_NETWORK / sepolia default already applied by config.js.
@@ -108,6 +110,38 @@ export function createBridge (opts = {}) {
     if (!key) return
     settleReceipts[key] = { txHash, amountMinor, ts: Date.now() }
     persistSettleReceipts()
+  }
+
+  // Best-effort FX rates to PREFILL the foreign-currency rate field (origin currency -> USD, in
+  // micros). Real network fetch when online, cached to disk as the last-known fallback. Never
+  // load-bearing: the offline expense path always lets the user type the rate by hand, and the
+  // stored expense freezes the rate that was actually used — so this only saves typing.
+  function loadRatesCache () {
+    if (!existsSync(ratesPath)) return null
+    try { return JSON.parse(readFileSync(ratesPath, 'utf8')) } catch { return null }
+  }
+  async function doRates () {
+    const cached = loadRatesCache()
+    try {
+      const res = await Promise.race([
+        fetch('https://open.er-api.com/v6/latest/USD'),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+      ])
+      const json = await res.json()
+      if (json?.result !== 'success' || !json.rates) throw new Error('bad rates response')
+      // API gives USD->X (1 USD = rates[X] of X). We need X->USD micros = round(1e6 / rates[X]).
+      const micros = {}
+      for (const [code, r] of Object.entries(json.rates)) {
+        if (typeof r === 'number' && r > 0) micros[code] = Math.round(1_000_000 / r)
+      }
+      micros.USD = 1_000_000
+      const payload = { base: 'USD', online: true, ts: Date.now(), rates: micros }
+      try { writeFileSync(ratesPath, JSON.stringify(payload)) } catch { /* best-effort */ }
+      return payload
+    } catch {
+      if (cached) return { ...cached, online: false, stale: true }
+      return { base: 'USD', online: false, ts: 0, rates: { USD: 1_000_000 } }
+    }
   }
 
   function emit () {
@@ -358,16 +392,33 @@ export function createBridge (opts = {}) {
     return membershipPublish
   }
 
-  /** Build a validated expense entry from request fields (shared by add + edit). */
-  function buildExpenseEntry ({ payer, amountMinor, description, participants, split, category }) {
+  /**
+   * Build a validated expense entry from request fields (shared by add + edit). The base currency
+   * is USD₮ (the settlement token). An expense entered in a foreign currency arrives with
+   * origCurrency/origAmountMinor/rate; we convert to base minor units HERE (authoritative, integer
+   * math) rather than trusting a client-supplied base amount, and record the origin for display.
+   */
+  function buildExpenseEntry ({ payer, amountMinor, description, participants, split, category, origCurrency, origAmountMinor, rate }) {
+    const foreign = isNonEmptyStr(origCurrency) && origCurrency !== 'USD'
+    let baseMinor = Number(amountMinor)
+    const extra = {}
+    if (foreign) {
+      const oa = Number(origAmountMinor)
+      const rm = Number(rate)
+      baseMinor = convertMinor(oa, rm) // integer conversion; validateExpense re-checks consistency
+      extra.origCurrency = origCurrency
+      extra.origAmountMinor = oa
+      extra.rate = rm
+    }
     return makeExpense({
       id: b4a.toString(crypto.randomBytes(8), 'hex'),
       payer: payer || memberId,
-      amountMinor: Number(amountMinor),
+      amountMinor: baseMinor,
       description: description || '',
       participants,
       split: split || 'equal',
       category: (typeof category === 'string' && category) ? category : 'other',
+      ...extra,
       ts: Date.now()
     })
   }
@@ -765,6 +816,7 @@ export function createBridge (opts = {}) {
     nudge: doNudge,
     addRecurring: doAddRecurring,
     stopRecurring: doStopRecurring,
+    rates: doRates,
     cashSettle: doCashSettle,
     approveWriter: doApproveWriter,
     settle: doSettle,
