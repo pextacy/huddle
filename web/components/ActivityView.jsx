@@ -8,6 +8,7 @@ import MobileHeader from './MobileHeader'
 import AddExpense from './AddExpense'
 import CommentThread from './CommentThread'
 import Icon from './Icon'
+import { CATEGORIES } from '../lib/categories'
 
 // Group entries by day label (Today / Yesterday / date) using their ts.
 function dayKey (ts) {
@@ -45,6 +46,9 @@ function toCsv (entries, group) {
 export default function ActivityView ({ group, wallet }) {
   const [filter, setFilter] = useState('all')
   const [q, setQ] = useState('')
+  const [cat, setCat] = useState('all')
+  const [who, setWho] = useState('all')
+  const [showFilters, setShowFilters] = useState(false)
   const [editing, setEditing] = useState(null)
   const [actionErr, setActionErr] = useState(null)
   const [busyId, setBusyId] = useState(null)
@@ -60,9 +64,15 @@ export default function ActivityView ({ group, wallet }) {
   }
   const entries = allEntries.filter((e) => e.type === 'expense' || e.type === 'payment' || e.type === 'fee' || e.type === 'reminder')
   const sorted = [...entries].sort((a, b) => (b.ts || 0) - (a.ts || 0))
+  // Members involved in an entry (payer/from/to), used by the "who" filter.
+  const partiesOf = (e) => [e.payer, e.from, e.to, ...(e.participants || [])].filter(Boolean)
+  const memberList = Object.values(group.members || {})
+  const activeFilters = (cat !== 'all' ? 1 : 0) + (who !== 'all' ? 1 : 0)
   const rows = sorted.filter((e) => {
     if (filter === 'expenses' && e.type !== 'expense') return false
     if (filter === 'settled' && e.type !== 'payment') return false
+    if (cat !== 'all' && !(e.type === 'expense' && (e.category || 'other') === cat)) return false
+    if (who !== 'all' && !partiesOf(e).includes(who)) return false
     if (!q.trim()) return true
     const hay = `${e.description || ''} ${e.note || ''} ${nameOf(group, e.payer)} ${nameOf(group, e.from)} ${nameOf(group, e.to)} ${e.txHash || ''} ${e.category || ''}`.toLowerCase()
     return hay.includes(q.trim().toLowerCase())
@@ -187,8 +197,33 @@ export default function ActivityView ({ group, wallet }) {
             <input className="lc-input mono" style={{ paddingLeft: 38 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search transactions…" />
           </div>
         </div>
+        <button className={`lc-btn lc-btn-sm ${activeFilters ? 'lc-btn-primary' : 'lc-btn-outline'}`} onClick={() => setShowFilters((v) => !v)} title="Filters" style={{ flexShrink: 0 }}>
+          <Icon name="settings" size={15} /> {activeFilters ? `Filters · ${activeFilters}` : 'Filter'}
+        </button>
         <button className="lc-btn lc-btn-outline lc-btn-sm" onClick={exportCsv} title="Export CSV" style={{ flexShrink: 0 }}><Icon name="down" size={15} /> CSV</button>
       </div>
+
+      {showFilters && (
+        <div className="m-card" style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="lc-field" style={{ marginBottom: 0 }}>
+            <label className="lc-label">Category</label>
+            <select className="lc-select" value={cat} onChange={(e) => setCat(e.target.value)}>
+              <option value="all">All categories</option>
+              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>)}
+            </select>
+          </div>
+          <div className="lc-field" style={{ marginBottom: 0 }}>
+            <label className="lc-label">Member</label>
+            <select className="lc-select" value={who} onChange={(e) => setWho(e.target.value)}>
+              <option value="all">Everyone</option>
+              {memberList.map((m) => <option key={m.id} value={m.id}>{m.id === group.me?.memberId ? 'You' : m.name}</option>)}
+            </select>
+          </div>
+          {activeFilters > 0 && (
+            <button className="lc-linkbtn" onClick={() => { setCat('all'); setWho('all') }}>Clear filters</button>
+          )}
+        </div>
+      )}
 
       {actionErr && <div className="lc-error" style={{ marginBottom: 12 }}>{actionErr}</div>}
 
