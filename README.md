@@ -36,6 +36,20 @@ Beyond equal splits, the ledger matches what Splitwise / Tricount / Settle Up of
 - **Cash / off-chain settlement** — “Mark as paid (cash)” records a repayment made in cash or by
   bank transfer, clearing the debt with **no on-chain transfer and no wallet needed** (works
   offline). On-chain USD₮ payments dedup on their tx hash; cash payments dedup on their entry id.
+  Either party can log it: pay a debt, or **“Mark received”** when someone pays *you* back.
+- **Multiple groups** — hold many groups/trips on one device and switch between them; each is its
+  own P2P ledger with its own members. Create, join by invite, switch, or leave from the group
+  switcher. Legacy single-group installs migrate automatically.
+- **Multi-currency** — enter an expense in EUR/GBP/TRY/JPY/… with an FX rate (best-effort live
+  prefill when online, editable, manual-first offline). It converts to the USD₮ base **once at
+  entry** with exact integer math, so balances stay deterministic and history never rewrites.
+- **Recurring expenses** — daily / weekly / monthly templates (rent, subscriptions). Due
+  occurrences materialize into real expenses with a **deterministic id + time**, so concurrent
+  peers converge to one entry — never a double charge. Stop a template anytime.
+- **Comments** — a threaded discussion hangs off each expense (“who had the extra beer?”),
+  replicated P2P; purely social, never affects balances.
+- **Reminders / nudges** — a creditor can nudge a debtor to settle up; nudges show in Activity.
+- **Search & filters** — full-text search plus category and member filters over the activity feed.
 - **CSV export** — download the whole ledger (expenses, payments, fees) from the Activity tab.
 
 ## Wallet
