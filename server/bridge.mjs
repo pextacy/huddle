@@ -603,14 +603,18 @@ export function createBridge (opts = {}) {
     const have = new Set(entries.filter((e) => e.type === 'expense').map((e) => e.id))
     const voided = new Set(entries.filter((e) => e.type === 'void').map((e) => e.target))
     const now = Date.now()
+    const MAX_PER_PASS = 200 // bound work per pass so a peer's back-dated templates can't runaway-spam
     let appended = 0
-    for (const tpl of latestTemplates(entries)) {
+    outer: for (const tpl of latestTemplates(entries)) {
       for (const occ of dueOccurrences(tpl, now)) {
         const fields = materializeOccurrence(tpl, occ)
         if (have.has(fields.id) || voided.has(fields.id)) continue // already materialized (or deleted)
-        await appendEntry(ledger.base, makeExpense(fields))
+        try {
+          await appendEntry(ledger.base, makeExpense(fields)) // makeExpense validates; skip a bad template
+        } catch { continue }
         have.add(fields.id)
         appended++
+        if (appended >= MAX_PER_PASS) break outer // remaining occurrences roll in on the next pass
       }
     }
     if (appended > 0) { await ledger.base.update(); emit() }

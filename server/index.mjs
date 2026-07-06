@@ -46,11 +46,19 @@ function send (res, status, body, origin) {
   res.end(data)
 }
 
+const MAX_BODY_BYTES = 1_000_000 // 1 MB — bodies are small JSON; cap to avoid memory-exhaustion.
+
 function readBody (req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let raw = ''
-    req.on('data', (c) => { raw += c })
+    let size = 0
+    req.on('data', (c) => {
+      size += c.length
+      if (size > MAX_BODY_BYTES) { reject(new Error('Request body too large')); req.destroy(); return }
+      raw += c
+    })
     req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}) } catch { resolve({}) } })
+    req.on('error', reject)
   })
 }
 
@@ -82,6 +90,14 @@ const routes = {
 const server = http.createServer(async (req, res) => {
   const origin = corsOrigin(req)
   if (req.method === 'OPTIONS') return send(res, 204, {}, origin)
+
+  // CSRF defense for state-changing requests. CORS only blocks a cross-site page from READING the
+  // response, not from SENDING a "simple" POST (e.g. content-type text/plain skips preflight), and
+  // this backend moves real money with no auth. So: if a browser sends a cross-origin Origin we
+  // don't recognize as local, refuse the request outright — evil.com can neither read nor act.
+  if (req.method !== 'GET' && req.headers.origin && !origin) {
+    return send(res, 403, { error: 'Cross-origin request refused' }, null)
+  }
 
   const url = new URL(req.url, `http://localhost:${PORT}`)
   const key = `${req.method} ${url.pathname}`
