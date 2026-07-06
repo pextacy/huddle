@@ -22,7 +22,7 @@ import { joinSwarm } from '../src/p2p/swarm.js'
 import { computeBalances } from '../src/domain/balances.js'
 import { settlementPlan } from '../src/domain/settlement.js'
 import { groupInsights } from '../src/domain/insights.js'
-import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment } from '../src/domain/entries.js'
+import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment, makeComment, COMMENT_MAX } from '../src/domain/entries.js'
 import { computeSettlement, platformRevenue } from '../src/domain/fees.js'
 import { isProActive, extendPro, MAX_MONTHS } from '../src/domain/pro.js'
 import { generateSeed, openWallet, closeWallet, getNativeBalance, getUsdtBalance, sendUsdt, getNetwork, NETWORK, USDT } from '../src/wallet/wdk.js'
@@ -430,6 +430,30 @@ export function createBridge (opts = {}) {
   }
 
   /**
+   * Add a comment to an expense (Splitwise-style discussion thread). Purely social — it replicates
+   * so every peer sees the note, but never touches balances. Requires the target expense to exist.
+   */
+  async function doAddComment ({ target, text }) {
+    requireWriter()
+    if (!isNonEmptyStr(target)) throw new Error('An expense id to comment on is required.')
+    const body = typeof text === 'string' ? text.trim() : ''
+    if (!body) throw new Error('A comment cannot be empty.')
+    if (body.length > COMMENT_MAX) throw new Error(`A comment must be ${COMMENT_MAX} characters or fewer.`)
+    const exp = await findExpense(target)
+    if (!exp) throw new Error('That expense no longer exists.')
+    await appendEntry(ledger.base, makeComment({
+      id: b4a.toString(crypto.randomBytes(8), 'hex'),
+      target,
+      by: memberId,
+      text: body,
+      ts: Date.now()
+    }))
+    await ledger.base.update()
+    emit()
+    return groupState()
+  }
+
+  /**
    * Record an off-chain ("cash") settlement (Splitwise/Settle Up parity): a debt repaid in cash or
    * by bank transfer, cleared without an on-chain USD₮ transfer. No wallet needed — it's a ledger
    * entry only. `to` is the creditor's memberId.
@@ -638,6 +662,7 @@ export function createBridge (opts = {}) {
     addExpense: doAddExpense,
     editExpense: doEditExpense,
     voidExpense: doVoidExpense,
+    addComment: doAddComment,
     cashSettle: doCashSettle,
     approveWriter: doApproveWriter,
     settle: doSettle,

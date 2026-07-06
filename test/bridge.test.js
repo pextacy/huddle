@@ -157,6 +157,45 @@ test('an expense with no category folds into "other" in insights', async () => {
   }
 })
 
+test('addComment attaches a replicated thread to an expense without touching balances', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sk-bridge-cmt-'))
+  const bridge = createBridge({ baseDir: dir, enableSwarm: false, enableWallet: false })
+  try {
+    const created = await bridge.createGroup({ name: 'Trip', member: 'Me' })
+    const me = created.me.memberId
+    const exp = await bridge.addExpense({ payer: me, amountMinor: 1000, description: 'Tickets', participants: [me, 'bob'] })
+    const expenseId = exp.entries.find((e) => e.type === 'expense').id
+    const before = { ...exp.balances }
+
+    const state = await bridge.addComment({ target: expenseId, text: '  who had the extra beer?  ' })
+    const comments = state.entries.filter((e) => e.type === 'comment')
+    assert.equal(comments.length, 1)
+    assert.equal(comments[0].target, expenseId)
+    assert.equal(comments[0].by, me)
+    assert.equal(comments[0].text, 'who had the extra beer?', 'text is trimmed')
+    assert.deepEqual(state.balances, before, 'comments never move balances')
+  } finally {
+    await bridge.teardown()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('addComment rejects empty text and unknown expenses', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sk-bridge-cmt2-'))
+  const bridge = createBridge({ baseDir: dir, enableSwarm: false, enableWallet: false })
+  try {
+    const created = await bridge.createGroup({ name: 'Trip', member: 'Me' })
+    const me = created.me.memberId
+    const exp = await bridge.addExpense({ payer: me, amountMinor: 1000, description: 'Tickets', participants: [me, 'bob'] })
+    const expenseId = exp.entries.find((e) => e.type === 'expense').id
+    await assert.rejects(() => bridge.addComment({ target: expenseId, text: '   ' }), /empty/)
+    await assert.rejects(() => bridge.addComment({ target: 'nope', text: 'hi' }), /no longer exists/)
+  } finally {
+    await bridge.teardown()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('a settle with an already-recorded receipt returns the prior tx hash without re-sending', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'sk-bridge-idem-'))
   // Seed a durable receipt (as if a prior settle's transfer landed but its response was lost).

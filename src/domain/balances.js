@@ -104,8 +104,9 @@ export function computeBalances (entries) {
       add(e.from, e.amountMinor) // paying down what you owe raises your balance toward zero
       add(e.to, -e.amountMinor)
     }
-    // 'wallet', 'addWriter', 'fee', and 'void' entries have no direct additive effect here.
-    // ('fee' is platform revenue to the treasury — src/domain/fees.js; 'void' is handled above.)
+    // 'wallet', 'addWriter', 'fee', 'void', and 'comment' entries have no direct additive effect
+    // here. ('fee' is platform revenue to the treasury — src/domain/fees.js; 'void' is handled
+    // above; 'comment' is a purely social thread on an expense — src/domain/entries.js.)
   }
   return net
 }

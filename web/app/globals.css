@@ -178,6 +178,19 @@ body {
 .m-act-amt { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; }
 .m-act-status { display: inline-flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 4px; }
 
+/* ── comment thread (per-expense discussion) ─────────────────── */
+.m-act-wrap { display: flex; flex-direction: column; }
+.m-thread { margin: 2px 4px 0; }
+.m-thread > .lc-linkbtn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--faint); padding: 4px 0; }
+.m-thread-body { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; margin-top: 4px; background: var(--row); border: 1px solid var(--border); border-radius: 10px; }
+.m-comment { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 8px; font-size: 13px; }
+.m-comment-who { font-weight: 700; color: var(--text); white-space: nowrap; }
+.m-comment-text { color: var(--text); word-break: break-word; }
+.m-comment-ts { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--faint); white-space: nowrap; }
+.m-comment-form { display: flex; gap: 6px; align-items: center; }
+.m-comment-form .lc-input { flex: 1; }
+.m-comment-form .lc-btn-sm { flex-shrink: 0; }
+
 /* ── buttons ─────────────────────────────────────────────────── */
 .lc-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

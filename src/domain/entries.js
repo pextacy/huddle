@@ -11,9 +11,12 @@
  * never calls Date.now(), so the same inputs always produce the same entry on every peer.
  */
 
-/** @typedef {'addWriter'|'wallet'|'expense'|'payment'|'fee'|'void'} EntryType */
+/** @typedef {'addWriter'|'wallet'|'expense'|'payment'|'fee'|'void'|'comment'} EntryType */
 
-export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void'])
+export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void', 'comment'])
+
+/** Max length of a comment body (kept small so the P2P view stays lightweight). */
+export const COMMENT_MAX = 500
 
 /** Split kinds that compute shares from weights (vs. 'equal' or an explicit minor-unit map). */
 export const SPLIT_KINDS = /** @type {const} */ (['percent', 'shares'])
@@ -38,6 +41,7 @@ export function validateEntry (entry) {
     case 'payment': return validatePayment(entry)
     case 'fee': return validateFee(entry)
     case 'void': return validateVoid(entry)
+    case 'comment': return validateComment(entry)
     default: return fail(`unhandled type "${entry.type}"`)
   }
 }
@@ -127,6 +131,21 @@ function validateVoid (e) {
   if (!isNonEmptyString(e.target)) fail('void.target (voided expense id) required')
   if (!isNonEmptyString(e.by)) fail('void.by (member id) required')
   if (!isPosInt(e.ts)) fail('void.ts must be a positive integer timestamp')
+  return e
+}
+
+/**
+ * Validate a comment — a threaded note attached to a prior expense (Splitwise-style discussion).
+ * Purely social: it never affects balances or insights, only replicates so every peer sees the
+ * thread. Carries the target expense id, the author member id, and the (bounded) text body.
+ */
+function validateComment (e) {
+  if (!isNonEmptyString(e.id)) fail('comment.id required')
+  if (!isNonEmptyString(e.target)) fail('comment.target (expense id) required')
+  if (!isNonEmptyString(e.by)) fail('comment.by (member id) required')
+  if (!isNonEmptyString(e.text)) fail('comment.text required')
+  if (e.text.length > COMMENT_MAX) fail(`comment.text must be <= ${COMMENT_MAX} chars`)
+  if (!isPosInt(e.ts)) fail('comment.ts must be a positive integer timestamp')
   return e
 }
 
@@ -234,4 +253,14 @@ export function makeFee (fields) {
  */
 export function makeVoid (fields) {
   return validateEntry({ type: 'void', ...fields })
+}
+
+/**
+ * Build a validated comment on an expense. `ts` from caller. Text is trimmed by the caller; the
+ * body is bounded to COMMENT_MAX so the replicated view stays small.
+ * @param {{ id:string, target:string, by:string, text:string, ts:number }} fields
+ * @returns {object}
+ */
+export function makeComment (fields) {
+  return validateEntry({ type: 'comment', ...fields })
 }

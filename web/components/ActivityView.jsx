@@ -6,6 +6,7 @@ import { fmt, nameOf } from '../lib/format'
 import { categoryEmoji } from '../lib/categories'
 import MobileHeader from './MobileHeader'
 import AddExpense from './AddExpense'
+import CommentThread from './CommentThread'
 import Icon from './Icon'
 
 // Group entries by day label (Today / Yesterday / date) using their ts.
@@ -52,6 +53,11 @@ export default function ActivityView ({ group, wallet }) {
 
   const allEntries = group.entries || []
   const voided = new Set(allEntries.filter((e) => e.type === 'void').map((e) => e.target))
+  // Comments bucketed by the expense they hang off, so each row renders its own thread.
+  const commentsByExpense = {}
+  for (const e of allEntries) {
+    if (e.type === 'comment') (commentsByExpense[e.target] ||= []).push(e)
+  }
   const entries = allEntries.filter((e) => e.type === 'expense' || e.type === 'payment' || e.type === 'fee')
   const sorted = [...entries].sort((a, b) => (b.ts || 0) - (a.ts || 0))
   const rows = sorted.filter((e) => {
@@ -91,24 +97,27 @@ export default function ActivityView ({ group, wallet }) {
     if (e.type === 'expense') {
       const isVoid = voided.has(e.id)
       return (
-        <div key={e.id} className={`m-act ${isVoid ? 'voided' : ''}`}>
-          <span className="m-act-icon">{categoryEmoji(e.category)}</span>
-          <div className="m-act-body">
-            <div className="m-act-title" style={isVoid ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>{e.description || 'Expense'}</div>
-            <div className="m-act-sub">{e.category || 'other'} · {nameOf(group, e.payer)}{e.split?.kind ? ` · ${e.split.kind}` : ''}</div>
+        <div key={e.id} className="m-act-wrap">
+          <div className={`m-act ${isVoid ? 'voided' : ''}`}>
+            <span className="m-act-icon">{categoryEmoji(e.category)}</span>
+            <div className="m-act-body">
+              <div className="m-act-title" style={isVoid ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>{e.description || 'Expense'}</div>
+              <div className="m-act-sub">{e.category || 'other'} · {nameOf(group, e.payer)}{e.split?.kind ? ` · ${e.split.kind}` : ''}</div>
+            </div>
+            <div className="m-act-right">
+              <div className="m-act-amt" style={isVoid ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>- {fmt(e.amountMinor)}</div>
+              {isVoid
+                ? <div className="m-act-status"><span className="m-dot debt" />Removed</div>
+                : <div className="m-act-status"><span className="m-dot muted" />Split {e.participants?.length ?? 0}</div>}
+              {canEdit && !isVoid && (
+                <div className="row" style={{ gap: 10, marginTop: 6, justifyContent: 'flex-end' }}>
+                  <button className="lc-linkbtn" onClick={() => setEditing(e)}>Edit</button>
+                  <button className="lc-linkbtn danger" disabled={busyId === e.id} onClick={() => del(e)}>{busyId === e.id ? '…' : 'Delete'}</button>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="m-act-right">
-            <div className="m-act-amt" style={isVoid ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>- {fmt(e.amountMinor)}</div>
-            {isVoid
-              ? <div className="m-act-status"><span className="m-dot debt" />Removed</div>
-              : <div className="m-act-status"><span className="m-dot muted" />Split {e.participants?.length ?? 0}</div>}
-            {canEdit && !isVoid && (
-              <div className="row" style={{ gap: 10, marginTop: 6, justifyContent: 'flex-end' }}>
-                <button className="lc-linkbtn" onClick={() => setEditing(e)}>Edit</button>
-                <button className="lc-linkbtn danger" disabled={busyId === e.id} onClick={() => del(e)}>{busyId === e.id ? '…' : 'Delete'}</button>
-              </div>
-            )}
-          </div>
+          {!isVoid && <CommentThread group={group} expenseId={e.id} comments={commentsByExpense[e.id]} />}
         </div>
       )
     }

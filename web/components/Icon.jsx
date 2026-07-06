@@ -26,7 +26,8 @@ const PATHS = {
   back: 'M19 12H5M11 18l-6-6 6-6',
   bank: 'M3 21h18M4 10h16M5 10l7-6 7 6M6 10v11M18 10v11M10 10v11M14 10v11',
   sparkle: 'M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17l-1.9-5.1L4.5 10l5.6-1.4L12 3z',
-  spend: 'M4 20V10M10 20V4M16 20v-7M22 20H2'
+  spend: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  chat: 'M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-4-1L3 20l1.1-5a8.4 8.4 0 0 1-1-4 8.4 8.4 0 0 1 9-8.4 8.4 8.4 0 0 1 8.9 8.4z'
 }
 
 export default function Icon ({ name, size = 20, className, style }) {
