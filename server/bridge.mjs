@@ -276,10 +276,54 @@ export function createBridge (opts = {}) {
   }
 
   // ── group / ledger ──────────────────────────────────────────────────────────
-  function persistGroup (meta) { writeFileSync(groupMetaPath, JSON.stringify(meta, null, 2)) }
+  // Group registry: a device can hold many groups (Splitwise-style) but keeps ONE active at a time
+  // (the live ledger + swarm). The registry is `{ activeId, groups: [meta,...] }`. Legacy installs
+  // that only have the old single `group.json` are migrated into the registry on first load.
+  const registryPath = join(baseDir, 'groups.json')
+  function loadRegistry () {
+    if (existsSync(registryPath)) {
+      try {
+        const reg = JSON.parse(readFileSync(registryPath, 'utf8'))
+        if (reg && Array.isArray(reg.groups)) return reg
+      } catch { /* corrupt -> fall through to migration/empty */ }
+    }
+    // Migrate a legacy single-group install.
+    if (existsSync(groupMetaPath)) {
+      try {
+        const meta = JSON.parse(readFileSync(groupMetaPath, 'utf8'))
+        if (meta && meta.id) return { activeId: meta.id, groups: [meta] }
+      } catch { /* ignore */ }
+    }
+    return { activeId: null, groups: [] }
+  }
+  function saveRegistry (reg) {
+    try { writeFileSync(registryPath, JSON.stringify(reg, null, 2)) } catch { /* best-effort */ }
+  }
+  /** Add or replace a group meta in the registry; optionally make it the active group. */
+  function upsertGroup (meta, { active = false } = {}) {
+    const reg = loadRegistry()
+    const i = reg.groups.findIndex((g) => g.id === meta.id)
+    if (i >= 0) reg.groups[i] = { ...reg.groups[i], ...meta }
+    else reg.groups.push(meta)
+    if (active) reg.activeId = meta.id
+    saveRegistry(reg)
+  }
+  function removeGroup (id) {
+    const reg = loadRegistry()
+    reg.groups = reg.groups.filter((g) => g.id !== id)
+    if (reg.activeId === id) reg.activeId = reg.groups[0]?.id ?? null
+    saveRegistry(reg)
+    return reg
+  }
+  function persistGroup (meta) { upsertGroup(meta, { active: true }) }
   function loadGroupMeta () {
-    if (!existsSync(groupMetaPath)) return null
-    try { return JSON.parse(readFileSync(groupMetaPath, 'utf8')) } catch { return null } // corrupt file -> start fresh, don't crash
+    const reg = loadRegistry()
+    return reg.groups.find((g) => g.id === reg.activeId) || reg.groups[0] || null
+  }
+  /** The lightweight group list for the UI: id/name + which is active. */
+  function groupList () {
+    const reg = loadRegistry()
+    return { activeId: reg.activeId, groups: reg.groups.map((g) => ({ id: g.id, name: g.name, active: g.id === reg.activeId })) }
   }
 
   async function startLedger ({ invite, secretHex, topic, bootstrap, meta }) {
@@ -367,6 +411,45 @@ export function createBridge (opts = {}) {
     persistGroup(meta)
     emit()
     return groupState()
+  }
+
+  /**
+   * Switch the active group (multi-group support). Tears down the current live ledger + swarm and
+   * brings up the selected group's ledger with that group's own identity. No-op if already active.
+   */
+  async function doSwitchGroup ({ id }) {
+    if (!isNonEmptyStr(id)) throw new Error('A group id is required.')
+    if (ledger && ledger.group.id === id) return groupState()
+    const meta = loadRegistry().groups.find((g) => g.id === id)
+    if (!meta) throw new Error('That group is not on this device.')
+    await teardownLedger()
+    await ensureWallet()
+    memberId = meta.memberId
+    memberName = meta.memberName
+    const { topic } = joinGroup(meta.secretHex)
+    await startLedger({ invite: meta.invite, secretHex: meta.secretHex, topic, bootstrap: meta.bootstrap, meta })
+    upsertGroup(meta, { active: true })
+    await maybePublishMembership()
+    emit()
+    return groupState()
+  }
+
+  /**
+   * Leave a group: drop it from this device's registry. If it was the active group, switch to
+   * another remaining group (or fall back to no active group → onboarding). The group lives on for
+   * other peers; this only forgets it locally.
+   */
+  async function doLeaveGroup ({ id }) {
+    if (!isNonEmptyStr(id)) throw new Error('A group id is required.')
+    const wasActive = ledger && ledger.group.id === id
+    const reg = removeGroup(id)
+    if (wasActive) {
+      await teardownLedger()
+      memberId = null; memberName = null
+      if (reg.activeId) await doSwitchGroup({ id: reg.activeId })
+    }
+    emit()
+    return fullState()
   }
 
   /**
@@ -765,7 +848,7 @@ export function createBridge (opts = {}) {
     }
     return {
       active: true,
-      group: { name: ledger.group.name, invite: ledger.group.invite, creator: ledger.group.creator },
+      group: { id: ledger.group.id, name: ledger.group.name, invite: ledger.group.invite, creator: ledger.group.creator },
       me: { memberId, memberName, writable: isWritable(ledger.base), writerKey: localWriterKey(ledger.base) },
       members,
       entries,
@@ -788,7 +871,7 @@ export function createBridge (opts = {}) {
   }
 
   async function fullState () {
-    return { wallet: await walletStatus(), group: await groupState() }
+    return { wallet: await walletStatus(), group: await groupState(), groups: groupList() }
   }
 
   async function restore () {
@@ -809,6 +892,8 @@ export function createBridge (opts = {}) {
     groupState,
     createGroup: doCreateGroup,
     joinGroup: doJoinGroup,
+    switchGroup: doSwitchGroup,
+    leaveGroup: doLeaveGroup,
     addExpense: doAddExpense,
     editExpense: doEditExpense,
     voidExpense: doVoidExpense,

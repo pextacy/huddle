@@ -62,7 +62,7 @@ export default function Page () {
           <Onboarding />
         ) : (
           <>
-            {tab === 'ledger' && <LedgerView group={group} wallet={wallet} showAdd={showAdd} setShowAdd={setShowAdd} />}
+            {tab === 'ledger' && <LedgerView group={group} wallet={wallet} groups={state.groups} showAdd={showAdd} setShowAdd={setShowAdd} />}
             {tab === 'activity' && <ActivityView group={group} wallet={wallet} />}
             {tab === 'wallet' && <WalletView group={group} wallet={wallet} />}
           </>

@@ -5,6 +5,7 @@ import { post } from '../lib/api'
 import { fmt, fmtSigned, nameOf, initials } from '../lib/format'
 import AddExpense from './AddExpense'
 import MobileHeader from './MobileHeader'
+import GroupSwitcher from './GroupSwitcher'
 import Qr from './Qr'
 import Icon from './Icon'
 
@@ -20,7 +21,7 @@ function clientFee (amountMinor, fee) {
   return f
 }
 
-export default function LedgerView ({ group, wallet, showAdd, setShowAdd }) {
+export default function LedgerView ({ group, wallet, groups, showAdd, setShowAdd }) {
   const me = group.me
   const [copied, setCopied] = useState(false)
   const [showQr, setShowQr] = useState(false)
@@ -107,7 +108,9 @@ export default function LedgerView ({ group, wallet, showAdd, setShowAdd }) {
 
   return (
     <>
-      <MobileHeader title={group.group.name} online={online} showWifi />
+      <MobileHeader title={group.group.name} online={online} showWifi
+        rightSlot={<GroupSwitcher groups={groups?.groups} activeId={groups?.activeId ?? group.group.id} activeName={group.group.name} />}
+      />
 
       {showAdd && <div style={{ marginBottom: 12 }}><AddExpense group={group} onClose={() => setShowAdd(false)} /></div>}
 

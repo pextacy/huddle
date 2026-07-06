@@ -191,6 +191,12 @@ body {
 .m-comment-form .lc-input { flex: 1; }
 .m-comment-form .lc-btn-sm { flex-shrink: 0; }
 
+/* ── group switcher (multi-group) ────────────────────────────── */
+.m-groupbtn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); color: var(--text); font-size: 12px; font-weight: 700; cursor: pointer; max-width: 140px; }
+.m-groupbtn-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; z-index: 80; }
+.m-sheet { width: 100%; max-width: 480px; background: var(--panel); border: 1px solid var(--border); border-bottom: 0; border-radius: 16px 16px 0 0; padding: 18px 16px 28px; max-height: 82vh; overflow-y: auto; }
+
 /* ── buttons ─────────────────────────────────────────────────── */
 .lc-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
