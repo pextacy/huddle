@@ -63,6 +63,7 @@ const routes = {
   'POST /api/expense/edit': async (body) => bridge.editExpense(body),
   'POST /api/expense/delete': async (body) => bridge.voidExpense(body),
   'POST /api/comment': async (body) => bridge.addComment(body),
+  'POST /api/nudge': async (body) => bridge.nudge(body),
   'POST /api/writer/approve': async (body) => bridge.approveWriter(body),
   'POST /api/settle/quote': async (body) => bridge.quoteSettle(body),
   'POST /api/settle': async (body) => bridge.settle(body),

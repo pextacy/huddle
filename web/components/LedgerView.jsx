@@ -28,6 +28,8 @@ export default function LedgerView ({ group, wallet, showAdd, setShowAdd }) {
   const [settleErr, setSettleErr] = useState(null)
   const [lastSettle, setLastSettle] = useState(null)
   const [cashing, setCashing] = useState(null)
+  const [nudging, setNudging] = useState(null)
+  const [nudged, setNudged] = useState({})
 
   // A stable idempotency key per pending transfer, minted once and reused across retries until the
   // debt is actually recorded. Without this, a retry after a lost response (the transfer already
@@ -85,6 +87,12 @@ export default function LedgerView ({ group, wallet, showAdd, setShowAdd }) {
       const res = await post('settle/cash', { to: t.to, amountMinor: t.amountMinor })
       setLastSettle({ cash: true, ...res })
     } catch (e) { setSettleErr(e.message) } finally { setCashing(null) }
+  }
+  async function nudge (t) {
+    const k = `${t.from}-${t.to}`
+    setNudging(k); setSettleErr(null)
+    try { await post('nudge', { to: t.from }); setNudged((m) => ({ ...m, [k]: true })) }
+    catch (e) { setSettleErr(e.message) } finally { setNudging(null) }
   }
   function copyInvite () {
     navigator.clipboard?.writeText(group.group.invite)
@@ -167,12 +175,23 @@ export default function LedgerView ({ group, wallet, showAdd, setShowAdd }) {
       ) : myTransfers.length === 0 ? (
         <div className="m-stack">
           <div className="m-card"><span className="lc-empty">You’re square. Others still owe:</span></div>
-          {plan.map((t) => (
-            <div key={`${t.from}-${t.to}-${t.amountMinor}`} className="m-brow">
-              <div className="m-who"><div className="m-who-name">{nameOf(group, t.from)} → {nameOf(group, t.to)}</div><div className="m-who-sub">Pending settlement</div></div>
-              <span className="m-amt">{fmt(t.amountMinor)}</span>
-            </div>
-          ))}
+          {plan.map((t) => {
+            const owedToMe = t.to === me.memberId
+            const k = `${t.from}-${t.to}`
+            return (
+              <div key={`${t.from}-${t.to}-${t.amountMinor}`} className="m-brow">
+                <div className="m-who"><div className="m-who-name">{nameOf(group, t.from)} → {nameOf(group, t.to)}</div><div className="m-who-sub">Pending settlement</div></div>
+                <div className="row" style={{ gap: 10 }}>
+                  <span className="m-amt">{fmt(t.amountMinor)}</span>
+                  {owedToMe && (
+                    <button className="lc-btn lc-btn-ghost lc-btn-sm" disabled={nudging === k || nudged[k] || !me.writable} onClick={() => nudge(t)}>
+                      <Icon name="bell" size={14} /> {nudging === k ? '…' : nudged[k] ? 'Sent' : 'Remind'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       ) : (
         <div className="m-stack">

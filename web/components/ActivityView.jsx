@@ -58,7 +58,7 @@ export default function ActivityView ({ group, wallet }) {
   for (const e of allEntries) {
     if (e.type === 'comment') (commentsByExpense[e.target] ||= []).push(e)
   }
-  const entries = allEntries.filter((e) => e.type === 'expense' || e.type === 'payment' || e.type === 'fee')
+  const entries = allEntries.filter((e) => e.type === 'expense' || e.type === 'payment' || e.type === 'fee' || e.type === 'reminder')
   const sorted = [...entries].sort((a, b) => (b.ts || 0) - (a.ts || 0))
   const rows = sorted.filter((e) => {
     if (filter === 'expenses' && e.type !== 'expense') return false
@@ -135,6 +135,22 @@ export default function ActivityView ({ group, wallet }) {
           <div className="m-act-right">
             <div className="m-act-amt credit">+ {fmt(e.amountMinor)}</div>
             <div className="m-act-status"><span className="m-dot credit" />{cash ? 'Cash' : 'Settled'}</div>
+          </div>
+        </div>
+      )
+    }
+    if (e.type === 'reminder') {
+      const mine = e.to === group.me?.memberId
+      return (
+        <div key={e.id} className="m-act">
+          <span className="m-act-icon"><Icon name="bell" size={18} /></span>
+          <div className="m-act-body">
+            <div className="m-act-title">{mine ? `${nameOf(group, e.from)} nudged you` : `${nameOf(group, e.from)} nudged ${nameOf(group, e.to)}`}</div>
+            <div className="m-act-sub">Reminder to settle up{e.note ? ` · ${e.note}` : ''}</div>
+          </div>
+          <div className="m-act-right">
+            {e.amountMinor ? <div className="m-act-amt muted">{fmt(e.amountMinor)}</div> : null}
+            <div className="m-act-status"><span className="m-dot muted" />Nudge</div>
           </div>
         </div>
       )

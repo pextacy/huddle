@@ -22,7 +22,7 @@ import { joinSwarm } from '../src/p2p/swarm.js'
 import { computeBalances } from '../src/domain/balances.js'
 import { settlementPlan } from '../src/domain/settlement.js'
 import { groupInsights } from '../src/domain/insights.js'
-import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment, makeComment, COMMENT_MAX } from '../src/domain/entries.js'
+import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment, makeComment, makeReminder, COMMENT_MAX } from '../src/domain/entries.js'
 import { computeSettlement, platformRevenue } from '../src/domain/fees.js'
 import { isProActive, extendPro, MAX_MONTHS } from '../src/domain/pro.js'
 import { generateSeed, openWallet, closeWallet, getNativeBalance, getUsdtBalance, sendUsdt, getNetwork, NETWORK, USDT } from '../src/wallet/wdk.js'
@@ -454,6 +454,31 @@ export function createBridge (opts = {}) {
   }
 
   /**
+   * Nudge a debtor to settle up (Splitwise-style reminder). Purely social — it replicates so the
+   * debtor sees it in their activity feed, but moves no money and never touches balances. Only a
+   * member who is actually owed (net creditor) may nudge, and only someone who actually owes.
+   */
+  async function doNudge ({ to, note }) {
+    requireWriter()
+    if (!isNonEmptyStr(to)) throw new Error('A member to remind is required.')
+    if (to === memberId) throw new Error('You cannot nudge yourself.')
+    const entries = await readLedger(ledger.base)
+    const net = computeBalances(entries)
+    if ((net[memberId] ?? 0) <= 0) throw new Error('You can only send reminders when others owe you.')
+    if ((net[to] ?? 0) >= 0) throw new Error('That member does not owe anything.')
+    // The outstanding amount owed toward this creditor, from the minimal settlement plan.
+    const plan = settlementPlan(net)
+    const owed = plan.filter((t) => t.from === to && t.to === memberId).reduce((s, t) => s + t.amountMinor, 0)
+    const reminder = { id: b4a.toString(crypto.randomBytes(8), 'hex'), from: memberId, to, ts: Date.now() }
+    if (owed > 0) reminder.amountMinor = owed
+    if (isNonEmptyStr(note)) reminder.note = note.trim().slice(0, COMMENT_MAX)
+    await appendEntry(ledger.base, makeReminder(reminder))
+    await ledger.base.update()
+    emit()
+    return groupState()
+  }
+
+  /**
    * Record an off-chain ("cash") settlement (Splitwise/Settle Up parity): a debt repaid in cash or
    * by bank transfer, cleared without an on-chain USD₮ transfer. No wallet needed — it's a ledger
    * entry only. `to` is the creditor's memberId.
@@ -663,6 +688,7 @@ export function createBridge (opts = {}) {
     editExpense: doEditExpense,
     voidExpense: doVoidExpense,
     addComment: doAddComment,
+    nudge: doNudge,
     cashSettle: doCashSettle,
     approveWriter: doApproveWriter,
     settle: doSettle,

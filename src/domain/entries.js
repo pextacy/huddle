@@ -11,9 +11,9 @@
  * never calls Date.now(), so the same inputs always produce the same entry on every peer.
  */
 
-/** @typedef {'addWriter'|'wallet'|'expense'|'payment'|'fee'|'void'|'comment'} EntryType */
+/** @typedef {'addWriter'|'wallet'|'expense'|'payment'|'fee'|'void'|'comment'|'reminder'} EntryType */
 
-export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void', 'comment'])
+export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void', 'comment', 'reminder'])
 
 /** Max length of a comment body (kept small so the P2P view stays lightweight). */
 export const COMMENT_MAX = 500
@@ -42,6 +42,7 @@ export function validateEntry (entry) {
     case 'fee': return validateFee(entry)
     case 'void': return validateVoid(entry)
     case 'comment': return validateComment(entry)
+    case 'reminder': return validateReminder(entry)
     default: return fail(`unhandled type "${entry.type}"`)
   }
 }
@@ -146,6 +147,22 @@ function validateComment (e) {
   if (!isNonEmptyString(e.text)) fail('comment.text required')
   if (e.text.length > COMMENT_MAX) fail(`comment.text must be <= ${COMMENT_MAX} chars`)
   if (!isPosInt(e.ts)) fail('comment.ts must be a positive integer timestamp')
+  return e
+}
+
+/**
+ * Validate a reminder ("nudge") — a creditor asking a debtor to settle up (Splitwise reminders).
+ * Purely social: it never affects balances, only replicates so the debtor sees it in their feed.
+ * `amountMinor` is the outstanding amount at nudge time (informational, optional). `note` optional.
+ */
+function validateReminder (e) {
+  if (!isNonEmptyString(e.id)) fail('reminder.id required')
+  if (!isNonEmptyString(e.from)) fail('reminder.from (creditor) required')
+  if (!isNonEmptyString(e.to)) fail('reminder.to (debtor) required')
+  if (e.from === e.to) fail('reminder.from and reminder.to must differ')
+  if (e.amountMinor !== undefined && !isPosInt(e.amountMinor)) fail('reminder.amountMinor must be a positive integer when present')
+  if (e.note !== undefined && typeof e.note !== 'string') fail('reminder.note must be a string when present')
+  if (!isPosInt(e.ts)) fail('reminder.ts must be a positive integer timestamp')
   return e
 }
 
@@ -263,4 +280,13 @@ export function makeVoid (fields) {
  */
 export function makeComment (fields) {
   return validateEntry({ type: 'comment', ...fields })
+}
+
+/**
+ * Build a validated reminder ("nudge") from a creditor to a debtor. `ts` from caller.
+ * @param {{ id:string, from:string, to:string, amountMinor?:number, note?:string, ts:number }} fields
+ * @returns {object}
+ */
+export function makeReminder (fields) {
+  return validateEntry({ type: 'reminder', ...fields })
 }
