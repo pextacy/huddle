@@ -15,14 +15,34 @@ const PORT = Number(process.env.PORT || 8787)
 const bridge = createBridge()
 await bridge.restore()
 
-function send (res, status, body) {
+/**
+ * Only reflect CORS for local origins. This backend moves real money (POST /api/settle) and has
+ * no auth, so it must NOT be callable from arbitrary websites the user happens to visit — a
+ * wildcard `*` would let evil.com issue preflighted JSON calls to localhost. The Next.js frontend
+ * runs on some localhost port, so any localhost/127.0.0.1/::1 origin is allowed; everything else
+ * gets no CORS header and is blocked by the browser.
+ */
+function corsOrigin (req) {
+  const origin = req.headers.origin
+  if (!origin) return null // same-origin / non-browser caller — nothing to reflect
+  try {
+    // URL.hostname wraps IPv6 literals in brackets ('[::1]'), so strip them before comparing.
+    const h = new URL(origin).hostname.replace(/^\[|\]$/g, '')
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return origin
+  } catch { /* malformed Origin */ }
+  return null
+}
+
+function send (res, status, body, origin) {
   const data = JSON.stringify(body)
-  res.writeHead(status, {
+  const headers = {
     'content-type': 'application/json',
-    'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET,POST,OPTIONS',
-    'access-control-allow-headers': 'content-type'
-  })
+    'access-control-allow-headers': 'content-type',
+    vary: 'Origin'
+  }
+  if (origin) headers['access-control-allow-origin'] = origin
+  res.writeHead(status, headers)
   res.end(data)
 }
 
@@ -40,25 +60,33 @@ const routes = {
   'POST /api/group/create': async (body) => bridge.createGroup(body),
   'POST /api/group/join': async (body) => bridge.joinGroup(body),
   'POST /api/expense': async (body) => bridge.addExpense(body),
+  'POST /api/expense/edit': async (body) => bridge.editExpense(body),
+  'POST /api/expense/delete': async (body) => bridge.voidExpense(body),
   'POST /api/writer/approve': async (body) => bridge.approveWriter(body),
-  'POST /api/payment': async (body) => bridge.recordPayment(body),
-  'POST /api/settle': async (body) => bridge.settle(body)
+  'POST /api/settle/quote': async (body) => bridge.quoteSettle(body),
+  'POST /api/settle': async (body) => bridge.settle(body),
+  'POST /api/settle/cash': async (body) => bridge.cashSettle(body),
+  'POST /api/pro/subscribe': async (body) => bridge.subscribePro(body),
+  'POST /api/network': async (body) => bridge.setNetwork(body)
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.method === 'OPTIONS') return send(res, 204, {})
+  const origin = corsOrigin(req)
+  if (req.method === 'OPTIONS') return send(res, 204, {}, origin)
 
   const url = new URL(req.url, `http://localhost:${PORT}`)
   const key = `${req.method} ${url.pathname}`
 
   // Server-Sent Events: push full state on every ledger change.
   if (key === 'GET /api/events') {
-    res.writeHead(200, {
+    const sseHeaders = {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
       connection: 'keep-alive',
-      'access-control-allow-origin': '*'
-    })
+      vary: 'Origin'
+    }
+    if (origin) sseHeaders['access-control-allow-origin'] = origin
+    res.writeHead(200, sseHeaders)
     const push = async () => {
       try { res.write(`data: ${JSON.stringify(await bridge.fullState())}\n\n`) } catch {}
     }
@@ -70,13 +98,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   const handler = routes[key]
-  if (!handler) return send(res, 404, { error: `No route ${key}` })
+  if (!handler) return send(res, 404, { error: `No route ${key}` }, origin)
 
   try {
     const body = req.method === 'POST' ? await readBody(req) : null
-    send(res, 200, await handler(body))
+    send(res, 200, await handler(body), origin)
   } catch (e) {
-    send(res, 400, { error: e.shortMessage || e.message })
+    send(res, 400, { error: e.shortMessage || e.message }, origin)
   }
 })
 

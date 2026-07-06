@@ -1,16 +1,22 @@
 /**
  * Ledger entry types + validation (pure, deterministic — no I/O, no floats).
  *
- * Entry shapes (docs/docs.md §5): 'addWriter' | 'wallet' | 'expense' | 'payment'.
+ * Entry shapes (docs/docs.md §5): 'addWriter' | 'wallet' | 'expense' | 'payment' | 'fee'.
  * Money is always integer minor units (cents) — never floats (docs/claude.md).
+ *
+ * 'fee' records a platform settlement fee paid on-chain to the treasury (the revenue model,
+ * src/domain/fees.js). It carries its own tx hash and never affects group balances.
  *
  * Constructors take an explicit `ts` (set by the caller at append time) — the domain layer
  * never calls Date.now(), so the same inputs always produce the same entry on every peer.
  */
 
-/** @typedef {'addWriter'|'wallet'|'expense'|'payment'} EntryType */
+/** @typedef {'addWriter'|'wallet'|'expense'|'payment'|'fee'|'void'} EntryType */
 
-export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment'])
+export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void'])
+
+/** Split kinds that compute shares from weights (vs. 'equal' or an explicit minor-unit map). */
+export const SPLIT_KINDS = /** @type {const} */ (['percent', 'shares'])
 
 function fail (msg) { throw new Error(`Invalid entry: ${msg}`) }
 function isNonEmptyString (s) { return typeof s === 'string' && s.length > 0 }
@@ -30,6 +36,8 @@ export function validateEntry (entry) {
     case 'wallet': return validateWallet(entry)
     case 'expense': return validateExpense(entry)
     case 'payment': return validatePayment(entry)
+    case 'fee': return validateFee(entry)
+    case 'void': return validateVoid(entry)
     default: return fail(`unhandled type "${entry.type}"`)
   }
 }
@@ -52,6 +60,9 @@ function validateExpense (e) {
   if (!isNonEmptyString(e.payer)) fail('expense.payer required')
   if (!isPosInt(e.amountMinor)) fail('expense.amountMinor must be a positive integer (minor units)')
   if (!isNonEmptyString(e.currency)) fail('expense.currency required')
+  // `category` is optional (older ledgers predate it) but, if present, must be a string —
+  // src/domain/insights.js normalizes any unknown value to 'other', so we stay lenient here.
+  if (e.category !== undefined && !isNonEmptyString(e.category)) fail('expense.category must be a non-empty string when present')
   if (!Array.isArray(e.participants) || e.participants.length === 0) fail('expense.participants must be a non-empty array')
   if (!e.participants.every(isNonEmptyString)) fail('expense.participants must be strings')
   if (new Set(e.participants).size !== e.participants.length) fail('expense.participants must be unique')
@@ -59,6 +70,8 @@ function validateExpense (e) {
 
   if (e.split === 'equal') {
     // ok — shares computed from participants
+  } else if (e.split && typeof e.split === 'object' && typeof e.split.kind === 'string') {
+    validateWeightedSplit(e) // { kind:'percent'|'shares', weights:{ memberId: weight } }
   } else if (e.split && typeof e.split === 'object') {
     const keys = Object.keys(e.split)
     if (keys.length === 0) fail('expense.split (custom) must have at least one share')
@@ -73,8 +86,47 @@ function validateExpense (e) {
     if (new Set(keys).size !== e.participants.length) fail('expense.split must cover exactly the participants')
     if (sum !== e.amountMinor) fail(`expense.split sums to ${sum}, expected ${e.amountMinor}`)
   } else {
-    fail("expense.split must be 'equal' or a { memberId: minorUnits } object")
+    fail("expense.split must be 'equal', a { memberId: minorUnits } map, or a { kind, weights } object")
   }
+  return e
+}
+
+/**
+ * Validate a weighted split ({ kind:'percent'|'shares', weights }). The concrete minor-unit shares
+ * are derived deterministically at read time (see splitShares in balances.js) so every peer agrees;
+ * here we only check the weights are well-formed and cover exactly the participants.
+ *  - 'percent': positive integer weights that sum to exactly 100.
+ *  - 'shares':  positive integer weights (parts) with any positive sum.
+ */
+function validateWeightedSplit (e) {
+  if (!SPLIT_KINDS.includes(e.split.kind)) fail(`expense.split.kind must be one of ${SPLIT_KINDS.join(', ')}`)
+  const w = e.split.weights
+  if (!w || typeof w !== 'object') fail('expense.split.weights must be an object')
+  const keys = Object.keys(w)
+  if (keys.length === 0) fail('expense.split.weights must have at least one entry')
+  const partSet = new Set(e.participants)
+  let sum = 0
+  for (const k of keys) {
+    if (!partSet.has(k)) fail(`expense.split.weights key "${k}" is not a participant`)
+    if (!isPosInt(w[k])) fail(`expense.split.weights["${k}"] must be a positive integer`)
+    sum += w[k]
+  }
+  if (keys.length !== e.participants.length) fail('expense.split.weights must cover exactly the participants')
+  if (e.split.kind === 'percent' && sum !== 100) fail(`percent split weights must sum to 100 (got ${sum})`)
+  if (e.split.kind === 'shares' && sum <= 0) fail('shares split weights must sum to a positive number')
+  return e
+}
+
+/**
+ * Validate a void entry — a reversal that marks a prior expense as deleted/edited. It carries the
+ * target expense id and the member who voided it; balances + insights ignore any expense whose id
+ * has been voided. Append-only friendly: history is preserved, the effect is undone.
+ */
+function validateVoid (e) {
+  if (!isNonEmptyString(e.id)) fail('void.id required')
+  if (!isNonEmptyString(e.target)) fail('void.target (voided expense id) required')
+  if (!isNonEmptyString(e.by)) fail('void.by (member id) required')
+  if (!isPosInt(e.ts)) fail('void.ts must be a positive integer timestamp')
   return e
 }
 
@@ -85,16 +137,36 @@ function validatePayment (e) {
   if (e.from === e.to) fail('payment.from and payment.to must differ')
   if (!isPosInt(e.amountMinor)) fail('payment.amountMinor must be a positive integer (minor units)')
   if (!isNonEmptyString(e.currency)) fail('payment.currency required')
-  if (!isNonEmptyString(e.txHash)) fail('payment.txHash required (idempotency key)')
-  if (!isNonEmptyString(e.chain)) fail('payment.chain required')
+  // `method` distinguishes an on-chain USD₮ transfer (default) from a cash/off-chain settlement a
+  // member records manually. On-chain payments carry a tx hash (their idempotency key); a cash
+  // payment has none and dedups on its entry id instead (see computeBalances).
+  const method = e.method ?? 'onchain'
+  if (method !== 'onchain' && method !== 'cash') fail(`payment.method must be 'onchain' or 'cash'`)
+  if (method === 'onchain') {
+    if (!isNonEmptyString(e.txHash)) fail('payment.txHash required (idempotency key) for on-chain payments')
+    if (!isNonEmptyString(e.chain)) fail('payment.chain required for on-chain payments')
+  }
   if (!isPosInt(e.ts)) fail('payment.ts must be a positive integer timestamp')
+  return e
+}
+
+function validateFee (e) {
+  if (!isNonEmptyString(e.id)) fail('fee.id required')
+  if (!isNonEmptyString(e.payer)) fail('fee.payer required')
+  if (!isPosInt(e.amountMinor)) fail('fee.amountMinor must be a positive integer (minor units)')
+  if (!isNonEmptyString(e.currency)) fail('fee.currency required')
+  if (!isNonEmptyString(e.treasury)) fail('fee.treasury required (destination address)')
+  if (!isNonEmptyString(e.txHash)) fail('fee.txHash required (idempotency key)')
+  if (!isNonEmptyString(e.chain)) fail('fee.chain required')
+  if (!isPosInt(e.ts)) fail('fee.ts must be a positive integer timestamp')
   return e
 }
 
 /**
  * Build a validated expense entry. `ts` is supplied by the caller (no Date.now in domain).
  * @param {{ id:string, payer:string, amountMinor:number, currency?:string, description?:string,
- *           participants:string[], split?:'equal'|Record<string,number>, ts:number }} fields
+ *           participants:string[], split?:'equal'|Record<string,number>, category?:string,
+ *           ts:number }} fields
  * @returns {object}
  */
 export function makeExpense (fields) {
@@ -103,6 +175,7 @@ export function makeExpense (fields) {
     currency: 'USD',
     description: '',
     split: 'equal',
+    category: 'other',
     ...fields
   })
 }
@@ -116,8 +189,49 @@ export function makeExpense (fields) {
 export function makePayment (fields) {
   return validateEntry({
     type: 'payment',
+    method: 'onchain',
     currency: 'USDT',
     chain: 'ethereum',
     ...fields
   })
+}
+
+/**
+ * Build a validated off-chain ("cash") payment — a repayment a member records manually (cash, bank
+ * transfer, etc.) that clears the debt without an on-chain USD₮ transfer. No tx hash; dedups on id.
+ * @param {{ id:string, from:string, to:string, amountMinor:number, note?:string, ts:number }} fields
+ * @returns {object}
+ */
+export function makeCashPayment (fields) {
+  return validateEntry({
+    type: 'payment',
+    method: 'cash',
+    currency: 'USDT',
+    ...fields
+  })
+}
+
+/**
+ * Build a validated platform-fee entry (recorded after the on-chain fee transfer to the
+ * treasury). Carries its own tx hash so revenue is idempotent and never double-counted.
+ * @param {{ id:string, payer:string, amountMinor:number, treasury:string, currency?:string,
+ *           txHash:string, chain?:string, ts:number }} fields
+ * @returns {object}
+ */
+export function makeFee (fields) {
+  return validateEntry({
+    type: 'fee',
+    currency: 'USDT',
+    chain: 'ethereum',
+    ...fields
+  })
+}
+
+/**
+ * Build a validated void entry that reverses a prior expense (delete, or the old half of an edit).
+ * @param {{ id:string, target:string, by:string, ts:number }} fields
+ * @returns {object}
+ */
+export function makeVoid (fields) {
+  return validateEntry({ type: 'void', ...fields })
 }

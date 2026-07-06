@@ -9,8 +9,9 @@ import { join } from 'node:path'
 import {
   openLedger, appendEntry, addWriter, readLedger, localWriterKey, bootstrapKey, isWritable
 } from '../src/p2p/ledger.js'
-import { makeExpense, makePayment } from '../src/domain/entries.js'
+import { makeExpense, makePayment, makeFee } from '../src/domain/entries.js'
 import { computeBalances } from '../src/domain/balances.js'
+import { platformRevenue } from '../src/domain/fees.js'
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms))
 const dirA = mkdtempSync(join(tmpdir(), 'sk-s-a-'))
@@ -54,13 +55,22 @@ await appendEntry(baseB, makePayment({ id: 'p1', from: 'B', to: 'A', amountMinor
 // Replicate a duplicate of the same payment (retry) — must NOT double-count.
 await appendEntry(baseA, makePayment({ id: 'p1b', from: 'B', to: 'A', amountMinor: 500, txHash, ts: 2001 }))
 
+// Revenue path: B's settle also skims a 0.50% platform fee (2 cents) to the treasury, recorded
+// as a `fee` entry. A duplicate (retry) must NOT inflate revenue.
+const feeTx = '0x' + 'cd'.repeat(32)
+await appendEntry(baseB, makeFee({ id: 'f1', payer: 'B', amountMinor: 2, treasury: '0xdead', txHash: feeTx, ts: 2002 }))
+await appendEntry(baseA, makeFee({ id: 'f1b', payer: 'B', amountMinor: 2, treasury: '0xdead', txHash: feeTx, ts: 2003 }))
+
 const viewA = await syncRead(baseA)
 const viewB = await syncRead(baseB)
 const identical = JSON.stringify(viewA) === JSON.stringify(viewB)
 const after = computeBalances(viewA)
+const revenueA = platformRevenue(viewA)
+const revenueB = platformRevenue(viewB)
 console.log('views identical:', identical)
 console.log('after settle — balances:', after)
 console.log('peer count of payment entries:', viewA.filter(e => e.type === 'payment').length)
+console.log('platform revenue (A / B):', JSON.stringify(revenueA), '/', JSON.stringify(revenueB))
 
 unpipe()
 await baseA.close(); await baseB.close(); await storeA.close(); await storeB.close()
@@ -68,5 +78,8 @@ rmSync(dirA, { recursive: true, force: true }); rmSync(dirB, { recursive: true, 
 
 if (!identical) { console.error('FAIL: views diverged'); process.exit(1) }
 if (after.A !== 0 || after.B !== 0) { console.error('FAIL: debt not cleared for all peers'); process.exit(1) }
-console.log('\nPASS — settle loop closes: debt cleared for every peer, idempotent on tx hash.')
+// Fee replicated once (not twice), and revenue converges identically on both peers.
+if (revenueA.feesMinor !== 2 || revenueA.count !== 1) { console.error('FAIL: platform revenue wrong or double-counted'); process.exit(1) }
+if (JSON.stringify(revenueA) !== JSON.stringify(revenueB)) { console.error('FAIL: revenue diverged across peers'); process.exit(1) }
+console.log('\nPASS — settle loop closes: debt cleared for every peer, idempotent on tx hash; platform fee replicates once and revenue converges.')
 process.exit(0)

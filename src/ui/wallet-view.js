@@ -8,7 +8,7 @@
 
 import { qrSvg } from './qr.js'
 
-/** Solid-color palette (shared with index.html). No gradients anywhere. */
+/** Solid-color palette for the wallet CLI preview. No gradients anywhere. */
 export const THEME = {
   bg: '#0b0b0b',
   surface: '#161616',

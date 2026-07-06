@@ -21,12 +21,38 @@ import { openLedger, appendEntry, addWriter, readLedger, localWriterKey, bootstr
 import { joinSwarm } from '../src/p2p/swarm.js'
 import { computeBalances } from '../src/domain/balances.js'
 import { settlementPlan } from '../src/domain/settlement.js'
-import { makeExpense, makePayment } from '../src/domain/entries.js'
-import { generateSeed, openWallet, getNativeBalance, getUsdtBalance, sendUsdt, getNetwork, NETWORK, USDT } from '../src/wallet/wdk.js'
+import { groupInsights } from '../src/domain/insights.js'
+import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment } from '../src/domain/entries.js'
+import { computeSettlement, platformRevenue } from '../src/domain/fees.js'
+import { isProActive, extendPro, MAX_MONTHS } from '../src/domain/pro.js'
+import { generateSeed, openWallet, closeWallet, getNativeBalance, getUsdtBalance, sendUsdt, getNetwork, NETWORK, USDT } from '../src/wallet/wdk.js'
+import { TREASURY, FEE, PRO, ACTIVE_NETWORK, applyNetwork, getFaucets, networkChoices } from '../src/wallet/config.js'
 import { loadOrCreateSeed } from '../src/wallet/seed-store.js'
 import { formatUsdt } from '../src/wallet/units.js'
 
 const APP_DIR = 'splitkick-plus'
+
+const isNonEmptyStr = (s) => typeof s === 'string' && s.length > 0
+
+/** Coerce + validate a minor-unit amount before it can move money or hit the ledger. */
+function assertPosIntMinor (amountMinor, label = 'amount') {
+  const n = Number(amountMinor)
+  if (!Number.isSafeInteger(n) || n <= 0) {
+    throw new Error(`${label} must be a positive whole number of minor units (got ${amountMinor}).`)
+  }
+  return n
+}
+
+/** Current platform fee policy (treasury + bps + caps), resolved from config. */
+function feePolicy () {
+  return {
+    enabled: FEE.enabled,
+    bps: FEE.bps,
+    minMinor: FEE.minMinor,
+    maxMinor: FEE.maxMinor,
+    treasury: TREASURY.address
+  }
+}
 
 function appDir () {
   const home = homedir()
@@ -41,6 +67,20 @@ export function createBridge (opts = {}) {
   const enableWallet = opts.enableWallet !== false // default on
   mkdirSync(baseDir, { recursive: true })
   const groupMetaPath = join(baseDir, 'group.json')
+  const proPath = join(baseDir, 'pro.json')
+  const settlesPath = join(baseDir, 'settles.json')
+  const networkPath = join(baseDir, 'network.json')
+
+  // Apply any persisted network choice BEFORE the wallet opens, so the first wallet connects to the
+  // right chain. Falls back to the SPLITKICK_NETWORK / sepolia default already applied by config.js.
+  ;(function restoreNetwork () {
+    if (!existsSync(networkPath)) return
+    try {
+      const saved = JSON.parse(readFileSync(networkPath, 'utf8'))
+      if (saved?.key) applyNetwork(saved.key)
+    } catch { /* corrupt/unknown -> keep the default */ }
+  })()
+  function persistNetwork (key) { try { writeFileSync(networkPath, JSON.stringify({ key }, null, 2)) } catch { /* best-effort */ } }
 
   /** @type {{ store, base, swarm, group } | null} */
   let ledger = null
@@ -49,6 +89,25 @@ export function createBridge (opts = {}) {
   const listeners = new Set() // SSE subscribers
   let memberId = null
   let memberName = null
+  let publishedAddr // last wallet address (or null) we've appended for memberId
+  let balCache = null // { at, usdt, gas, online } — throttles on-chain balance RPC
+  const settleInFlight = new Set() // idempotency keys of settles currently sending on-chain
+
+  // Durable settle receipts keyed by idempotency key: { txHash, amountMinor, ts }. Written the
+  // instant an on-chain transfer succeeds — BEFORE the ledger append is attempted — so a retry
+  // after a crash/timeout/failed-append returns the prior tx hash instead of paying twice. The
+  // shared ledger clears the debt for everyone; this is only the local double-spend guard.
+  let settleReceipts = loadSettleReceipts()
+  function loadSettleReceipts () {
+    if (!existsSync(settlesPath)) return {}
+    try { return JSON.parse(readFileSync(settlesPath, 'utf8')) || {} } catch { return {} }
+  }
+  function persistSettleReceipts () { try { writeFileSync(settlesPath, JSON.stringify(settleReceipts, null, 2)) } catch { /* best-effort */ } }
+  function recordSettleReceipt (key, txHash, amountMinor) {
+    if (!key) return
+    settleReceipts[key] = { txHash, amountMinor, ts: Date.now() }
+    persistSettleReceipts()
+  }
 
   function emit () {
     for (const fn of listeners) { try { fn() } catch {} }
@@ -66,30 +125,127 @@ export function createBridge (opts = {}) {
     }
   }
 
+  // Below this much native balance we warn that a settlement may fail for lack of gas. 0.0003 ETH
+  // comfortably covers an ERC-20 transfer on testnet; on mainnet it's a floor, not a guarantee.
+  const LOW_GAS_WEI = 300000000000000n
+
   async function walletStatus () {
     await ensureWallet()
-    const net = { ...getNetwork(), explorerTxUrl: NETWORK.explorerTxUrl, explorerAddressUrl: NETWORK.explorerAddressUrl }
-    if (!wallet) return { ok: false, error: walletError, network: net }
-    let usdt = null; let gas = null; let online = true
-    try {
-      const [u, w] = await Promise.all([getUsdtBalance(wallet), getNativeBalance(wallet)])
-      usdt = formatUsdt(u); gas = (w / 10n ** 18n).toString() + '.' + (w % 10n ** 18n).toString().padStart(18, '0').slice(0, 6)
-    } catch (e) { online = false }
+    // network descriptor shared by every branch: active key + list power the UI's network switcher.
+    const net = {
+      ...getNetwork(),
+      key: ACTIVE_NETWORK,
+      testnet: NETWORK.testnet,
+      explorerTxUrl: NETWORK.explorerTxUrl,
+      explorerAddressUrl: NETWORK.explorerAddressUrl
+    }
+    const networks = networkChoices()
+    const faucets = getFaucets()
+    // The fee/pro policy is independent of whether the wallet itself opened, so surface it even
+    // when the wallet is unavailable — the UI still needs to show pricing.
+    const fee = feePolicy()
+    if (!wallet) return { ok: false, error: walletError, network: net, networks, faucets, testnet: NETWORK.testnet, fee, pro: proStatus() }
+    let usdt = null; let gas = null; let online = true; let lowGas = false
+    if (balCache && Date.now() - balCache.at < 8000) {
+      ;({ usdt, gas, online, lowGas } = balCache)
+    } else {
+      try {
+        const [u, w] = await Promise.all([getUsdtBalance(wallet), getNativeBalance(wallet)])
+        usdt = formatUsdt(u); gas = (w / 10n ** 18n).toString() + '.' + (w % 10n ** 18n).toString().padStart(18, '0').slice(0, 6)
+        lowGas = w < LOW_GAS_WEI
+      } catch (e) { online = false }
+      balCache = { at: Date.now(), usdt, gas, online, lowGas }
+    }
     return {
       ok: true,
       address: wallet.address,
       network: net,
+      networks,
+      faucets,
       testnet: NETWORK.testnet,
       usdt,
       gas,
+      lowGas,
       online,
-      usdtToken: USDT.address
+      usdtToken: USDT.address,
+      fee,
+      pro: proStatus()
     }
+  }
+
+  /**
+   * Switch the active blockchain network (testnet ↔ mainnet) at runtime. Applies the new params in
+   * place (config.applyNetwork), reopens the wallet against the new RPC/chain, and persists the
+   * choice so it survives restarts. The seed derives the same address on both chains, so the ledger
+   * and its published member addresses stay valid — no membership republish is needed.
+   */
+  async function doSetNetwork ({ key }) {
+    const k = String(key || '').toLowerCase()
+    if (!networkChoices().some((n) => n.key === k)) {
+      throw new Error(`Unknown network "${key}". Use one of: ${networkChoices().map((n) => n.key).join(', ')}.`)
+    }
+    if (k === ACTIVE_NETWORK && wallet) return walletStatus() // already there
+    applyNetwork(k)
+    persistNetwork(k)
+    // Drop the old wallet handle (and its RPC connection) so ensureWallet() reopens on the new chain.
+    if (wallet) { try { closeWallet(wallet) } catch {} }
+    wallet = null
+    walletError = null
+    balCache = null
+    await ensureWallet()
+    emit()
+    return walletStatus()
+  }
+
+  // ── pro subscription (second revenue stream) ────────────────────────────────
+  function loadPro () {
+    if (!existsSync(proPath)) return null
+    try { return JSON.parse(readFileSync(proPath, 'utf8')) } catch { return null } // corrupt -> treat as not subscribed
+  }
+  function persistPro (pro) { writeFileSync(proPath, JSON.stringify(pro, null, 2)) }
+
+  /** Current Pro status for the UI (active flag + expiry + price + cumulative subscription revenue). */
+  function proStatus () {
+    const pro = loadPro()
+    return {
+      enabled: PRO.enabled,
+      active: isProActive(pro, Date.now()),
+      until: pro?.until ?? null,
+      pricePerMonthMinor: PRO.pricePerMonthMinor,
+      maxMonths: MAX_MONTHS,
+      subscriptionRevenueMinor: pro?.subscriptionRevenueMinor ?? 0
+    }
+  }
+
+  /**
+   * Subscribe (or extend) Pro: a real on-chain USD₮ payment to the treasury that waives the
+   * per-settle fee for `months`. Online-only (writes to a blockchain). Treasury required.
+   */
+  async function doSubscribePro ({ months }) {
+    const m = Number(months)
+    if (!Number.isSafeInteger(m) || m <= 0 || m > MAX_MONTHS) throw new Error(`months must be a whole number between 1 and ${MAX_MONTHS}.`)
+    if (!PRO.enabled || !TREASURY.address) throw new Error('Pro is unavailable: no treasury address is configured.')
+    const priceMinor = m * PRO.pricePerMonthMinor
+    // Validate the price BEFORE touching the chain — a zero/misconfigured price must not burn gas
+    // on a 0-value transfer and then throw in extendPro, leaving the user charged-but-not-Pro.
+    if (!Number.isSafeInteger(priceMinor) || priceMinor <= 0) throw new Error('Pro pricing is not configured (price per month must be positive).')
+    await ensureWallet()
+    if (!wallet) throw new Error(`Wallet unavailable: ${walletError || 'unknown'}`)
+    // Real on-chain USD₮ transfer to the treasury — this is the subscription revenue.
+    const { hash } = await sendUsdt(wallet, TREASURY.address, priceMinor)
+    const next = extendPro(loadPro(), m, Date.now(), hash, priceMinor)
+    persistPro(next)
+    balCache = null // balance dropped; force a refresh
+    emit()
+    return { txHash: hash, months: m, priceMinor, pro: proStatus(), state: await fullState() }
   }
 
   // ── group / ledger ──────────────────────────────────────────────────────────
   function persistGroup (meta) { writeFileSync(groupMetaPath, JSON.stringify(meta, null, 2)) }
-  function loadGroupMeta () { return existsSync(groupMetaPath) ? JSON.parse(readFileSync(groupMetaPath, 'utf8')) : null }
+  function loadGroupMeta () {
+    if (!existsSync(groupMetaPath)) return null
+    try { return JSON.parse(readFileSync(groupMetaPath, 'utf8')) } catch { return null } // corrupt file -> start fresh, don't crash
+  }
 
   async function startLedger ({ invite, secretHex, topic, bootstrap, meta }) {
     const store = new Corestore(join(baseDir, 'store', meta.id))
@@ -107,9 +263,32 @@ export function createBridge (opts = {}) {
 
     ledger = { store, base, swarm, group: meta }
 
-    // Periodically pull updates so SSE pushes converge across peers.
-    base.update().catch(() => {})
-    const timer = setInterval(() => { base.update().then(emit).catch(() => {}) }, 1500)
+    // Seed our last-published address from the persisted ledger so a restart doesn't
+    // append a duplicate membership entry every launch.
+    publishedAddr = undefined
+    try {
+      for (const e of await readLedger(base)) {
+        if (e.type === 'wallet' && e.member === memberId) publishedAddr = e.address ?? null
+      }
+    } catch { /* fresh ledger */ }
+
+    // Periodically pull updates so SSE pushes converge across peers. Emit only when the view
+    // actually changed (or at most every 8s, to refresh wallet status) — idle groups shouldn't
+    // hammer the chain RPC or re-render the UI on every tick.
+    let lastVersion = -1
+    let lastEmit = 0
+    const tick = async () => {
+      await base.update()
+      await maybePublishMembership() // publishes once we're approved as a writer
+      const v = base.view?.version ?? 0
+      const now = Date.now()
+      if (v !== lastVersion || now - lastEmit >= 8000) {
+        lastVersion = v; lastEmit = now
+        emit()
+      }
+    }
+    tick().catch(() => {})
+    const timer = setInterval(() => { tick().catch(() => {}) }, 1500)
     ledger.timer = timer
     return ledger
   }
@@ -133,7 +312,7 @@ export function createBridge (opts = {}) {
     persistGroup(meta)
 
     // Creator is the initial writer — publish our member + wallet address.
-    await publishMembership()
+    await maybePublishMembership()
     emit()
     return groupState()
   }
@@ -154,28 +333,120 @@ export function createBridge (opts = {}) {
     return groupState()
   }
 
-  async function publishMembership () {
-    if (!ledger || !isWritable(ledger.base)) return
-    await ensureWallet()
-    const ts = Date.now()
-    await appendEntry(ledger.base, { type: 'wallet', member: memberId, name: memberName, chain: 'ethereum', address: wallet?.address ?? null, ts })
-    await ledger.base.update()
+  /**
+   * Publish (or refresh) our membership entry — but only when we're an authorized writer and
+   * only when our address actually changed. This is what makes a *joiner* visible to the group:
+   * a joined device isn't writable until approved, so it must (re)publish its name + wallet
+   * address the moment it gains write access — otherwise it never appears in `members`, can't be
+   * picked as a payer, and can't be settled to. Idempotent on address to avoid ledger churn.
+   */
+  let membershipPublish = null // serializes concurrent callers (tick vs. create/join) so the address check can't race
+  function maybePublishMembership () {
+    if (membershipPublish) return membershipPublish
+    membershipPublish = (async () => {
+      if (!ledger || !isWritable(ledger.base)) return
+      await ensureWallet()
+      const addr = wallet?.address ?? null
+      if (publishedAddr === addr) return
+      await appendEntry(ledger.base, { type: 'wallet', member: memberId, name: memberName, chain: 'ethereum', address: addr, ts: Date.now() })
+      publishedAddr = addr
+      await ledger.base.update()
+      emit()
+    })().finally(() => { membershipPublish = null })
+    return membershipPublish
   }
 
-  async function doAddExpense ({ payer, amountMinor, description, participants, split }) {
-    if (!ledger) throw new Error('No active group.')
-    if (!isWritable(ledger.base)) throw new Error('This device is not yet an authorized writer. Ask a member to approve your writer key.')
-    const id = b4a.toString(crypto.randomBytes(8), 'hex')
-    const entry = makeExpense({
-      id,
+  /** Build a validated expense entry from request fields (shared by add + edit). */
+  function buildExpenseEntry ({ payer, amountMinor, description, participants, split, category }) {
+    return makeExpense({
+      id: b4a.toString(crypto.randomBytes(8), 'hex'),
       payer: payer || memberId,
       amountMinor: Number(amountMinor),
       description: description || '',
       participants,
       split: split || 'equal',
+      category: (typeof category === 'string' && category) ? category : 'other',
       ts: Date.now()
     })
+  }
+
+  function requireWriter () {
+    if (!ledger) throw new Error('No active group.')
+    if (!isWritable(ledger.base)) throw new Error('This device is not yet an authorized writer. Ask a member to approve your writer key.')
+  }
+
+  /** Find an expense by id in the current ledger (null if absent). */
+  async function findExpense (id) {
+    for (const e of await readLedger(ledger.base)) {
+      if (e.type === 'expense' && e.id === id) return e
+    }
+    return null
+  }
+
+  async function doAddExpense (fields) {
+    requireWriter()
+    const entry = buildExpenseEntry(fields)
     await appendEntry(ledger.base, entry)
+    await ledger.base.update()
+    emit()
+    return groupState()
+  }
+
+  /**
+   * Delete an expense (Splitwise/Tricount parity). Append-only, so we record a `void` reversal that
+   * cancels the target expense's effect on balances + insights while preserving history.
+   */
+  async function doVoidExpense ({ target }) {
+    requireWriter()
+    if (!isNonEmptyStr(target)) throw new Error('An expense id to delete is required.')
+    const exp = await findExpense(target)
+    if (!exp) throw new Error('That expense no longer exists.')
+    // Already voided? No-op rather than piling up reversals.
+    const already = (await readLedger(ledger.base)).some((e) => e.type === 'void' && e.target === target)
+    if (already) return groupState()
+    await appendEntry(ledger.base, makeVoid({ id: b4a.toString(crypto.randomBytes(8), 'hex'), target, by: memberId, ts: Date.now() }))
+    await ledger.base.update()
+    emit()
+    return groupState()
+  }
+
+  /**
+   * Edit an expense: void the original and append a corrected one in a single operation, so every
+   * peer converges on the new version and the balances update atomically from the group's view.
+   */
+  async function doEditExpense ({ target, ...fields }) {
+    requireWriter()
+    if (!isNonEmptyStr(target)) throw new Error('An expense id to edit is required.')
+    const exp = await findExpense(target)
+    if (!exp) throw new Error('That expense no longer exists.')
+    const replacement = buildExpenseEntry(fields) // validates before we void anything
+    if (!(await readLedger(ledger.base)).some((e) => e.type === 'void' && e.target === target)) {
+      await appendEntry(ledger.base, makeVoid({ id: b4a.toString(crypto.randomBytes(8), 'hex'), target, by: memberId, ts: Date.now() }))
+    }
+    await appendEntry(ledger.base, replacement)
+    await ledger.base.update()
+    emit()
+    return groupState()
+  }
+
+  /**
+   * Record an off-chain ("cash") settlement (Splitwise/Settle Up parity): a debt repaid in cash or
+   * by bank transfer, cleared without an on-chain USD₮ transfer. No wallet needed — it's a ledger
+   * entry only. `to` is the creditor's memberId.
+   */
+  async function doCashSettle ({ to, amountMinor, note }) {
+    requireWriter()
+    if (!isNonEmptyStr(to)) throw new Error('Settle target (creditor memberId) is required.')
+    if (to === memberId) throw new Error('Cannot settle a debt to yourself.')
+    const amt = assertPosIntMinor(amountMinor, 'settle amount')
+    await appendEntry(ledger.base, makeCashPayment({
+      id: b4a.toString(crypto.randomBytes(8), 'hex'),
+      from: memberId,
+      to,
+      amountMinor: amt,
+      ...(isNonEmptyStr(note) ? { note: note.slice(0, 140) } : {}),
+      ts: Date.now()
+    }))
     await ledger.base.update()
     emit()
     return groupState()
@@ -191,14 +462,32 @@ export function createBridge (opts = {}) {
     return groupState()
   }
 
-  /** Record a payment entry (after an on-chain transfer). Idempotent on txHash downstream. */
-  async function doRecordPayment ({ from, to, amountMinor, txHash }) {
-    if (!ledger) throw new Error('No active group.')
-    const entry = makePayment({ id: b4a.toString(crypto.randomBytes(8), 'hex'), from, to, amountMinor: Number(amountMinor), txHash, ts: Date.now() })
+  /** Record a platform-fee entry after the on-chain skim to the treasury. Idempotent on txHash. */
+  async function recordFee ({ payer, amountMinor, treasury, txHash }) {
+    const amt = assertPosIntMinor(amountMinor, 'fee amount')
+    const entry = makeFee({ id: b4a.toString(crypto.randomBytes(8), 'hex'), payer, amountMinor: amt, treasury, txHash, ts: Date.now() })
     await appendEntry(ledger.base, entry)
     await ledger.base.update()
     emit()
-    return groupState()
+  }
+
+  /**
+   * Quote a settlement before the payer commits: returns the debt, the platform fee, and the
+   * total they will spend, plus whether the creditor has published an address yet. Read-only —
+   * moves no money. Powers the transparent fee breakdown in the UI.
+   */
+  async function doQuoteSettle ({ to, amountMinor }) {
+    const amt = assertPosIntMinor(amountMinor, 'settle amount')
+    const pol = feePolicy()
+    const proActive = isProActive(loadPro(), Date.now())
+    let creditorAddr = null
+    if (ledger && typeof to === 'string' && to.length) creditorAddr = await creditorAddress(to)
+    // Mirror doSettle's skip: no fee is charged when the treasury *is* the creditor (the skim
+    // would just pay them their own money), so the quote must not promise a fee that never moves.
+    const feeToSelf = !!(creditorAddr && pol.treasury && pol.treasury.toLowerCase() === creditorAddr.toLowerCase())
+    const feeEnabled = pol.enabled && !proActive && !feeToSelf
+    const { feeMinor, totalMinor, feeBps } = computeSettlement(amt, { ...pol, enabled: feeEnabled })
+    return { amountMinor: amt, feeMinor, totalMinor, feeBps, feeEnabled, pro: proActive, treasury: pol.treasury, creditorAddress: creditorAddr }
   }
 
   /** Resolve a member's published on-chain address from the ledger. */
@@ -214,21 +503,82 @@ export function createBridge (opts = {}) {
    * sees it cleared. `to` is the creditor's memberId; `amountMinor` is ledger minor units.
    * Online-only (FR-13): the USD₮ transfer writes to a blockchain.
    */
-  async function doSettle ({ to, amountMinor }) {
+  async function doSettle ({ to, amountMinor, idempotencyKey }) {
     if (!ledger) throw new Error('No active group.')
     if (!isWritable(ledger.base)) throw new Error('This device is not an authorized writer yet.')
-    await ensureWallet()
-    if (!wallet) throw new Error(`Wallet unavailable: ${walletError || 'unknown'}`)
+    if (typeof to !== 'string' || to.length === 0) throw new Error('Settle target (creditor memberId) is required.')
+    if (to === memberId) throw new Error('Cannot settle a debt to yourself.')
+    // Validate the amount BEFORE we touch the chain — never let bad input move real money.
+    const amt = assertPosIntMinor(amountMinor, 'settle amount')
+    const key = (typeof idempotencyKey === 'string' && idempotencyKey.length) ? idempotencyKey : null
 
-    const address = await creditorAddress(to)
-    if (!address) throw new Error('Creditor has not published a wallet address yet.')
+    // Idempotency (FR: a lost response must never cause a double on-chain payment). If a settle
+    // with this key already recorded a payment, return it WITHOUT sending again; if one is still
+    // in flight, refuse the concurrent duplicate. Falls back to no-guard when no key is supplied.
+    if (key) {
+      if (settleInFlight.has(key)) throw new Error('This settlement is already in progress.')
+      // A durable receipt (written the moment the transfer landed, even if the later ledger
+      // append failed) is the authoritative double-spend guard; the ledger scan is a fallback.
+      const receipt = settleReceipts[key]
+      if (receipt) return { txHash: receipt.txHash, feeTxHash: null, feeMinor: 0, totalMinor: receipt.amountMinor, duplicate: true, state: await groupState() }
+      const prior = (await readLedger(ledger.base)).find((e) => e.type === 'payment' && e.settleKey === key)
+      if (prior) return { txHash: prior.txHash, feeTxHash: null, feeMinor: 0, totalMinor: prior.amountMinor, duplicate: true, state: await groupState() }
+      settleInFlight.add(key)
+    }
 
-    // Real on-chain USD₮ transfer (needs the internet — this is the online-only step).
-    const { hash } = await sendUsdt(wallet, address, Number(amountMinor))
+    try {
+      await ensureWallet()
+      if (!wallet) throw new Error(`Wallet unavailable: ${walletError || 'unknown'}`)
 
-    // Record the settlement so the debt clears for everyone once replicated. Idempotent on hash.
-    await doRecordPayment({ from: memberId, to, amountMinor: Number(amountMinor), txHash: hash })
-    return { txHash: hash, state: await groupState() }
+      const address = await creditorAddress(to)
+      if (!address) throw new Error('Creditor has not published a wallet address yet.')
+
+      const pol = feePolicy()
+      // Pro subscribers settle with no per-settle fee (they pay the flat monthly subscription instead).
+      const proActive = isProActive(loadPro(), Date.now())
+      const { feeMinor } = computeSettlement(amt, { ...pol, enabled: pol.enabled && !proActive })
+
+      // 1) Pay the creditor the FULL debt on-chain (this is what clears it for everyone).
+      //    Needs the internet — the online-only step.
+      const { hash } = await sendUsdt(wallet, address, amt)
+
+      // Persist the receipt IMMEDIATELY — before the ledger append can fail. This is what makes a
+      // retry (lost response, crash between transfer and append) return this hash instead of paying
+      // the creditor a second time.
+      recordSettleReceipt(key, hash, amt)
+
+      // Record the settlement so the debt clears for everyone once replicated. The money has
+      // ALREADY moved, so a recording failure must never surface as a failed settle (that would
+      // hide the tx hash and invite a second payment) — capture it and return the hash regardless.
+      let recordError = null
+      try {
+        const entry = makePayment({ id: b4a.toString(crypto.randomBytes(8), 'hex'), from: memberId, to, amountMinor: amt, txHash: hash, ts: Date.now(), ...(key ? { settleKey: key } : {}) })
+        await appendEntry(ledger.base, entry)
+        await ledger.base.update()
+        emit()
+      } catch (e) { recordError = e.shortMessage || e.message }
+
+      // 2) Skim the platform fee to the treasury as a SEPARATE transfer (the revenue model).
+      //    Best-effort: the debt is already cleared, so a failed/skipped fee must NOT fail the
+      //    settle. Skip when the fee is zero or the treasury would be the creditor itself.
+      let feeTxHash = null
+      let feeMinorApplied = 0
+      let feeError = null
+      if (feeMinor > 0 && pol.treasury && pol.treasury.toLowerCase() !== address.toLowerCase()) {
+        try {
+          const feeRes = await sendUsdt(wallet, pol.treasury, feeMinor)
+          feeTxHash = feeRes.hash
+          feeMinorApplied = feeMinor
+          await recordFee({ payer: memberId, amountMinor: feeMinor, treasury: pol.treasury, txHash: feeTxHash })
+        } catch (e) { feeError = e.shortMessage || e.message }
+      }
+
+      balCache = null // funds left the wallet — force a fresh balance read (don't serve a stale cache)
+      // totalMinor reflects what actually moved on-chain (the fee is 0 here if it was deferred).
+      return { txHash: hash, feeTxHash, feeMinor: feeMinorApplied, totalMinor: amt + feeMinorApplied, feeError, recordError, state: await groupState() }
+    } finally {
+      if (key) settleInFlight.delete(key)
+    }
   }
 
   async function groupState () {
@@ -248,6 +598,8 @@ export function createBridge (opts = {}) {
       entries,
       balances: net,
       plan,
+      revenue: platformRevenue(entries),
+      insights: groupInsights(entries),
       peers: ledger.swarm ? ledger.swarm.swarm.connections.size : 0
     }
   }
@@ -284,9 +636,15 @@ export function createBridge (opts = {}) {
     createGroup: doCreateGroup,
     joinGroup: doJoinGroup,
     addExpense: doAddExpense,
+    editExpense: doEditExpense,
+    voidExpense: doVoidExpense,
+    cashSettle: doCashSettle,
     approveWriter: doApproveWriter,
-    recordPayment: doRecordPayment,
     settle: doSettle,
+    quoteSettle: doQuoteSettle,
+    subscribePro: doSubscribePro,
+    setNetwork: doSetNetwork,
+    proStatus,
     subscribe,
     restore,
     teardown: teardownLedger
