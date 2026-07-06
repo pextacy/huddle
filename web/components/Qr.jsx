@@ -16,7 +16,7 @@ export default function Qr ({ text, size = 132 }) {
   if (!svg) return null
   return (
     <div
-      style={{ background: '#fff', padding: 10, borderRadius: 12, width: 'fit-content', lineHeight: 0 }}
+      className="lc-qr"
       dangerouslySetInnerHTML={{ __html: svg.replace('<svg', `<svg width="${size}" height="${size}"`) }}
     />
   )
