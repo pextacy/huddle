@@ -22,7 +22,8 @@ import { joinSwarm } from '../src/p2p/swarm.js'
 import { computeBalances } from '../src/domain/balances.js'
 import { settlementPlan } from '../src/domain/settlement.js'
 import { groupInsights } from '../src/domain/insights.js'
-import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment, makeComment, makeReminder, COMMENT_MAX } from '../src/domain/entries.js'
+import { makeExpense, makePayment, makeFee, makeVoid, makeCashPayment, makeComment, makeReminder, makeRecurring, COMMENT_MAX } from '../src/domain/entries.js'
+import { latestTemplates, dueOccurrences, materializeOccurrence } from '../src/domain/recurring.js'
 import { computeSettlement, platformRevenue } from '../src/domain/fees.js'
 import { isProActive, extendPro, MAX_MONTHS } from '../src/domain/pro.js'
 import { generateSeed, openWallet, closeWallet, getNativeBalance, getUsdtBalance, sendUsdt, getNetwork, NETWORK, USDT } from '../src/wallet/wdk.js'
@@ -280,6 +281,7 @@ export function createBridge (opts = {}) {
     const tick = async () => {
       await base.update()
       await maybePublishMembership() // publishes once we're approved as a writer
+      await materializeDue().catch(() => {}) // roll any newly-due recurring occurrences into expenses
       const v = base.view?.version ?? 0
       const now = Date.now()
       if (v !== lastVersion || now - lastEmit >= 8000) {
@@ -448,6 +450,77 @@ export function createBridge (opts = {}) {
       text: body,
       ts: Date.now()
     }))
+    await ledger.base.update()
+    emit()
+    return groupState()
+  }
+
+  /**
+   * Materialize any due occurrences of the active recurring templates into real `expense` entries.
+   * Each occurrence's expense has a DETERMINISTIC id (`${templateId}#${index}`) and ts (the
+   * scheduled time), so even if multiple peers run this concurrently the appends collapse to one
+   * entry per occurrence in the Hyperbee view — no double-counting. Idempotent: skips occurrences
+   * whose expense id already exists. Returns the number newly appended.
+   */
+  async function materializeDue () {
+    if (!ledger || !isWritable(ledger.base)) return 0
+    const entries = await readLedger(ledger.base)
+    const have = new Set(entries.filter((e) => e.type === 'expense').map((e) => e.id))
+    const voided = new Set(entries.filter((e) => e.type === 'void').map((e) => e.target))
+    const now = Date.now()
+    let appended = 0
+    for (const tpl of latestTemplates(entries)) {
+      for (const occ of dueOccurrences(tpl, now)) {
+        const fields = materializeOccurrence(tpl, occ)
+        if (have.has(fields.id) || voided.has(fields.id)) continue // already materialized (or deleted)
+        await appendEntry(ledger.base, makeExpense(fields))
+        have.add(fields.id)
+        appended++
+      }
+    }
+    if (appended > 0) { await ledger.base.update(); emit() }
+    return appended
+  }
+
+  /**
+   * Create a recurring expense template (Splitwise recurring bills). Validates like an expense,
+   * then immediately materializes any occurrences already due (e.g. an anchor set today or in the
+   * past). The template itself never affects balances — its materialized expenses do.
+   */
+  async function doAddRecurring (fields) {
+    requireWriter()
+    const anchorTs = Number.isSafeInteger(fields.anchorTs) && fields.anchorTs > 0 ? fields.anchorTs : Date.now()
+    const tpl = makeRecurring({
+      id: b4a.toString(crypto.randomBytes(8), 'hex'),
+      payer: fields.payer || memberId,
+      amountMinor: Number(fields.amountMinor),
+      description: fields.description || '',
+      participants: fields.participants,
+      split: fields.split || 'equal',
+      category: (typeof fields.category === 'string' && fields.category) ? fields.category : 'other',
+      cadence: fields.cadence,
+      anchorTs,
+      active: true,
+      ts: Date.now()
+    })
+    await appendEntry(ledger.base, tpl)
+    await ledger.base.update()
+    await materializeDue()
+    emit()
+    return groupState()
+  }
+
+  /**
+   * Stop a recurring template (append-only): re-append it with active:false and a later ts, so
+   * `latestTemplates` treats it as inactive and no further occurrences materialize.
+   */
+  async function doStopRecurring ({ id }) {
+    requireWriter()
+    if (!isNonEmptyStr(id)) throw new Error('A recurring template id is required.')
+    const tpl = latestTemplates(await readLedger(ledger.base)).find((t) => t.id === id)
+    if (!tpl) throw new Error('That recurring template no longer exists.')
+    if (tpl.active === false) return groupState()
+    await appendEntry(ledger.base, makeRecurring({ ...tpl, active: false, ts: Date.now() }))
     await ledger.base.update()
     emit()
     return groupState()
@@ -649,6 +722,7 @@ export function createBridge (opts = {}) {
       plan,
       revenue: platformRevenue(entries),
       insights: groupInsights(entries),
+      recurring: latestTemplates(entries).filter((t) => t.active !== false),
       peers: ledger.swarm ? ledger.swarm.swarm.connections.size : 0
     }
   }
@@ -689,6 +763,8 @@ export function createBridge (opts = {}) {
     voidExpense: doVoidExpense,
     addComment: doAddComment,
     nudge: doNudge,
+    addRecurring: doAddRecurring,
+    stopRecurring: doStopRecurring,
     cashSettle: doCashSettle,
     approveWriter: doApproveWriter,
     settle: doSettle,

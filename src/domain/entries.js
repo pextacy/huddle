@@ -11,9 +11,12 @@
  * never calls Date.now(), so the same inputs always produce the same entry on every peer.
  */
 
-/** @typedef {'addWriter'|'wallet'|'expense'|'payment'|'fee'|'void'|'comment'|'reminder'} EntryType */
+/** @typedef {'addWriter'|'wallet'|'expense'|'payment'|'fee'|'void'|'comment'|'reminder'|'recurring'} EntryType */
 
-export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void', 'comment', 'reminder'])
+export const ENTRY_TYPES = /** @type {const} */ (['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void', 'comment', 'reminder', 'recurring'])
+
+/** Recurrence cadences a template may use (mirrors src/domain/recurring.js). */
+export const RECUR_CADENCES = /** @type {const} */ (['daily', 'weekly', 'monthly'])
 
 /** Max length of a comment body (kept small so the P2P view stays lightweight). */
 export const COMMENT_MAX = 500
@@ -43,6 +46,7 @@ export function validateEntry (entry) {
     case 'void': return validateVoid(entry)
     case 'comment': return validateComment(entry)
     case 'reminder': return validateReminder(entry)
+    case 'recurring': return validateRecurring(entry)
     default: return fail(`unhandled type "${entry.type}"`)
   }
 }
@@ -72,7 +76,18 @@ function validateExpense (e) {
   if (!e.participants.every(isNonEmptyString)) fail('expense.participants must be strings')
   if (new Set(e.participants).size !== e.participants.length) fail('expense.participants must be unique')
   if (!isPosInt(e.ts)) fail('expense.ts must be a positive integer timestamp')
+  validateSplit(e)
+  return e
+}
 
+/**
+ * Validate an expense-style split against its participants + amount. Shared by `expense` and
+ * `recurring` (a template carries the same split shape). Throws on malformed input.
+ *  - 'equal': shares computed from participants.
+ *  - { kind:'percent'|'shares', weights }: weighted split.
+ *  - { memberId: minorUnits } map: explicit shares summing to amountMinor.
+ */
+function validateSplit (e) {
   if (e.split === 'equal') {
     // ok — shares computed from participants
   } else if (e.split && typeof e.split === 'object' && typeof e.split.kind === 'string') {
@@ -93,6 +108,27 @@ function validateExpense (e) {
   } else {
     fail("expense.split must be 'equal', a { memberId: minorUnits } map, or a { kind, weights } object")
   }
+}
+
+/**
+ * Validate a recurring expense template. Same shape as an expense (payer/amount/participants/split/
+ * category) plus a `cadence`, an `anchorTs` (first occurrence), and an `active` flag. It is a
+ * template, not an expense — it materializes into `expense` entries (src/domain/recurring.js).
+ */
+function validateRecurring (e) {
+  if (!isNonEmptyString(e.id)) fail('recurring.id required')
+  if (!isNonEmptyString(e.payer)) fail('recurring.payer required')
+  if (!isPosInt(e.amountMinor)) fail('recurring.amountMinor must be a positive integer (minor units)')
+  if (!isNonEmptyString(e.currency)) fail('recurring.currency required')
+  if (e.category !== undefined && !isNonEmptyString(e.category)) fail('recurring.category must be a non-empty string when present')
+  if (!Array.isArray(e.participants) || e.participants.length === 0) fail('recurring.participants must be a non-empty array')
+  if (!e.participants.every(isNonEmptyString)) fail('recurring.participants must be strings')
+  if (new Set(e.participants).size !== e.participants.length) fail('recurring.participants must be unique')
+  if (!RECUR_CADENCES.includes(e.cadence)) fail(`recurring.cadence must be one of ${RECUR_CADENCES.join(', ')}`)
+  if (!isPosInt(e.anchorTs)) fail('recurring.anchorTs must be a positive integer timestamp')
+  if (typeof e.active !== 'boolean') fail('recurring.active must be a boolean')
+  if (!isPosInt(e.ts)) fail('recurring.ts must be a positive integer timestamp')
+  validateSplit(e)
   return e
 }
 
@@ -289,4 +325,23 @@ export function makeComment (fields) {
  */
 export function makeReminder (fields) {
   return validateEntry({ type: 'reminder', ...fields })
+}
+
+/**
+ * Build a validated recurring expense template. `ts` from caller. Defaults mirror makeExpense.
+ * @param {{ id:string, payer:string, amountMinor:number, currency?:string, description?:string,
+ *           participants:string[], split?:'equal'|object, category?:string, cadence:string,
+ *           anchorTs:number, active?:boolean, ts:number }} fields
+ * @returns {object}
+ */
+export function makeRecurring (fields) {
+  return validateEntry({
+    type: 'recurring',
+    currency: 'USD',
+    description: '',
+    split: 'equal',
+    category: 'other',
+    active: true,
+    ...fields
+  })
 }

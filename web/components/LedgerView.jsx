@@ -30,6 +30,7 @@ export default function LedgerView ({ group, wallet, showAdd, setShowAdd }) {
   const [cashing, setCashing] = useState(null)
   const [nudging, setNudging] = useState(null)
   const [nudged, setNudged] = useState({})
+  const [stopping, setStopping] = useState(null)
 
   // A stable idempotency key per pending transfer, minted once and reused across retries until the
   // debt is actually recorded. Without this, a retry after a lost response (the transfer already
@@ -88,6 +89,11 @@ export default function LedgerView ({ group, wallet, showAdd, setShowAdd }) {
       setLastSettle({ cash: true, ...res })
     } catch (e) { setSettleErr(e.message) } finally { setCashing(null) }
   }
+  async function stopRecurring (id) {
+    if (typeof window !== 'undefined' && !window.confirm('Stop this recurring expense? Past occurrences stay; no new ones are added.')) return
+    setStopping(id); setSettleErr(null)
+    try { await post('recurring/stop', { id }) } catch (e) { setSettleErr(e.message) } finally { setStopping(null) }
+  }
   async function nudge (t) {
     const k = `${t.from}-${t.to}`
     setNudging(k); setSettleErr(null)
@@ -139,6 +145,31 @@ export default function LedgerView ({ group, wallet, showAdd, setShowAdd }) {
         <div className="mono small wrap muted" style={{ marginTop: 10 }}>{group.group.invite}</div>
         {showQr && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}><Qr text={group.group.invite} size={180} /></div>}
       </div>
+
+      {/* Recurring expenses */}
+      {group.recurring?.length > 0 && (
+        <>
+          <div className="m-section"><Icon name="activity" size={17} /> Recurring</div>
+          <div className="m-stack">
+            {group.recurring.map((r) => (
+              <div key={r.id} className="m-brow">
+                <div className="m-who">
+                  <div className="m-who-name">{r.description || 'Recurring expense'}</div>
+                  <div className="m-who-sub">{r.cadence} · {fmt(r.amountMinor)} USD₮ · {r.participants?.length ?? 0} people</div>
+                </div>
+                <div className="row" style={{ gap: 10 }}>
+                  <span className="m-amt">{fmt(r.amountMinor)}</span>
+                  {me.writable && (
+                    <button className="lc-btn lc-btn-ghost lc-btn-sm" disabled={stopping === r.id} onClick={() => stopRecurring(r.id)}>
+                      {stopping === r.id ? '…' : 'Stop'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Global balances */}
       <div className="m-section">Global Balances</div>

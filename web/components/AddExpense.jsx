@@ -51,6 +51,7 @@ export default function AddExpense ({ group, onClose, editing }) {
   const [selected, setSelected] = useState(() => init?.selected || new Set(members.map((m) => m.id)))
   const [custom, setCustom] = useState(init?.custom || {})
   const [weights, setWeights] = useState(init?.weights || {})
+  const [repeat, setRepeat] = useState('none')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -117,8 +118,9 @@ export default function AddExpense ({ group, onClose, editing }) {
       }
 
       if (editing) await post('expense/edit', { target: editing.id, ...payload })
+      else if (repeat !== 'none') await post('recurring', { ...payload, cadence: repeat, anchorTs: Date.now() })
       else await post('expense', payload)
-      setAmount(''); setDesc(''); setCustom({}); setWeights({})
+      setAmount(''); setDesc(''); setCustom({}); setWeights({}); setRepeat('none')
       onClose?.()
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
@@ -240,8 +242,20 @@ export default function AddExpense ({ group, onClose, editing }) {
           </div>
         )}
 
+        {!editing && (
+          <div className="lc-field">
+            <label className="lc-label">Repeat</label>
+            <div className="lc-seg">
+              {[['none', 'One-off'], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']].map(([k, label]) => (
+                <button type="button" key={k} className={`lc-seg-item ${repeat === k ? 'active' : ''}`} onClick={() => setRepeat(k)}>{label}</button>
+              ))}
+            </div>
+            {repeat !== 'none' && <div className="muted small" style={{ marginTop: 8 }}>Adds this expense now and automatically every {repeat === 'daily' ? 'day' : repeat === 'weekly' ? 'week' : 'month'}. Manage it under Recurring on the Ledger.</div>}
+          </div>
+        )}
+
         {error && <div className="lc-error" style={{ marginBottom: 12 }}>{error}</div>}
-        <button className="lc-btn lc-btn-primary lc-btn-block" onClick={submit} disabled={busy}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Add expense'}</button>
+        <button className="lc-btn lc-btn-primary lc-btn-block" onClick={submit} disabled={busy}>{busy ? 'Saving…' : editing ? 'Save changes' : repeat !== 'none' ? 'Add recurring expense' : 'Add expense'}</button>
       </div>
     </div>
   )

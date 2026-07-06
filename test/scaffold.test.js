@@ -18,5 +18,5 @@ test('domain modules expose their public functions', () => {
 })
 
 test('entry types are the documented kinds', () => {
-  assert.deepEqual([...ENTRY_TYPES], ['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void', 'comment', 'reminder'])
+  assert.deepEqual([...ENTRY_TYPES], ['addWriter', 'wallet', 'expense', 'payment', 'fee', 'void', 'comment', 'reminder', 'recurring'])
 })
