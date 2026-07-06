@@ -17,7 +17,7 @@ import crypto from 'hypercore-crypto'
 import b4a from 'b4a'
 
 import { createGroup, joinGroup } from '../src/p2p/topic.js'
-import { openLedger, appendEntry, addWriter, readLedger, localWriterKey, bootstrapKey, isWritable } from '../src/p2p/ledger.js'
+import { openLedger, appendEntry, addWriter, readLedger, localWriterKey, bootstrapKey, isWritable, publishBinding, hasBinding } from '../src/p2p/ledger.js'
 import { joinSwarm } from '../src/p2p/swarm.js'
 import { computeBalances } from '../src/domain/balances.js'
 import { settlementPlan } from '../src/domain/settlement.js'
@@ -94,6 +94,7 @@ export function createBridge (opts = {}) {
   let memberId = null
   let memberName = null
   let publishedAddr // last wallet address (or null) we've appended for memberId
+  let bindingPublished = false // whether we've appended our writerKey<->memberId identity binding
   let balCache = null // { at, usdt, gas, online } — throttles on-chain balance RPC
   const settleInFlight = new Set() // idempotency keys of settles currently sending on-chain
 
@@ -346,6 +347,7 @@ export function createBridge (opts = {}) {
     // Seed our last-published address from the persisted ledger so a restart doesn't
     // append a duplicate membership entry every launch.
     publishedAddr = undefined
+    bindingPublished = false
     try {
       for (const e of await readLedger(base)) {
         if (e.type === 'wallet' && e.member === memberId) publishedAddr = e.address ?? null
@@ -465,6 +467,12 @@ export function createBridge (opts = {}) {
     if (membershipPublish) return membershipPublish
     membershipPublish = (async () => {
       if (!ledger || !isWritable(ledger.base)) return
+      // Publish our identity binding (writerKey<->memberId) BEFORE any wallet entry, so the ledger
+      // can verify our address/comments/nudges are really ours. Skip if already bound (persisted).
+      if (!bindingPublished) {
+        if (!(await hasBinding(ledger.base, memberId))) await publishBinding(ledger.base, memberId)
+        bindingPublished = true
+      }
       await ensureWallet()
       const addr = wallet?.address ?? null
       if (publishedAddr === addr) return

@@ -13,8 +13,8 @@ import b4a from 'b4a'
 import Corestore from 'corestore'
 
 import { createGroup, joinGroup } from '../src/p2p/topic.js'
-import { openLedger, appendEntry, readLedger } from '../src/p2p/ledger.js'
-import { makeExpense } from '../src/domain/entries.js'
+import { openLedger, appendEntry, readLedger, publishBinding } from '../src/p2p/ledger.js'
+import { makeExpense, makeComment, makeReminder } from '../src/domain/entries.js'
 
 test('invite code round-trips to the same 32-byte topic', () => {
   const { topic, inviteCode } = createGroup()
@@ -49,6 +49,54 @@ test('apply drops malformed/malicious entries so peers cannot corrupt balances',
     const view = await readLedger(base)
     const ids = view.filter((e) => e.type === 'expense').map((e) => e.id)
     assert.deepEqual(ids, ['ok'], 'only the valid expense entered the view')
+    await base.close(); await store.close()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a writer bound to member A cannot publish an identity entry as member B (anti-spoof)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sk-led-bind-'))
+  try {
+    const store = new Corestore(dir)
+    const base = await openLedger(store, null)
+    // This single writer binds itself to "ada".
+    await publishBinding(base, 'ada')
+
+    // Legit: ada publishes her own wallet address, a comment, and a nudge she sends.
+    await appendEntry(base, { type: 'wallet', member: 'ada', chain: 'ethereum', address: '0xADA', ts: 1 })
+    await appendEntry(base, makeExpense({ id: 'x1', payer: 'ada', amountMinor: 1000, participants: ['ada', 'bob'], ts: 2 }))
+    await appendEntry(base, makeComment({ id: 'c1', target: 'x1', by: 'ada', text: 'mine', ts: 3 }))
+    await appendEntry(base, makeReminder({ id: 'r1', from: 'ada', to: 'bob', ts: 4 }))
+
+    // Spoof attempts from the SAME writer, claiming to be "bob":
+    await appendEntry(base, { type: 'wallet', member: 'bob', chain: 'ethereum', address: '0xATTACKER', ts: 5 }) // redirect bob's settlement!
+    await appendEntry(base, makeComment({ id: 'c2', target: 'x1', by: 'bob', text: 'not bob', ts: 6 }))
+    await appendEntry(base, makeReminder({ id: 'r2', from: 'bob', to: 'ada', ts: 7 }))
+
+    const view = await readLedger(base)
+    const wallets = view.filter((e) => e.type === 'wallet')
+    assert.deepEqual(wallets.map((w) => w.member), ['ada'], 'only ada’s own wallet entry is accepted')
+    assert.equal(wallets[0].address, '0xADA', 'no attacker address for bob entered the view')
+    assert.equal(view.filter((e) => e.type === 'comment').length, 1, 'the spoofed comment as bob is dropped')
+    assert.equal(view.filter((e) => e.type === 'reminder').length, 1, 'the spoofed nudge as bob is dropped')
+    // The binding record itself is internal and never surfaces as a ledger entry.
+    assert.equal(view.filter((e) => e.type === 'member').length, 0)
+    await base.close(); await store.close()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('an identity entry with no prior binding is dropped', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sk-led-nobind-'))
+  try {
+    const store = new Corestore(dir)
+    const base = await openLedger(store, null)
+    // No publishBinding — an unbound writer cannot assert a wallet address.
+    await appendEntry(base, { type: 'wallet', member: 'ada', chain: 'ethereum', address: '0xADA', ts: 1 })
+    const view = await readLedger(base)
+    assert.equal(view.filter((e) => e.type === 'wallet').length, 0, 'unbound identity entry rejected')
     await base.close(); await store.close()
   } finally {
     rmSync(dir, { recursive: true, force: true })
