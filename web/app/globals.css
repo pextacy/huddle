@@ -14,7 +14,7 @@
   --border-strong: #3a3a3a;
   --text: #ededed;
   --muted: #9aa39a;
-  --faint: #6f786f;
+  --faint: #828c82; /* lifted from #6f786f for AA-legible small mono labels on near-black */
   --primary: #00ff66;
   --on-primary: #052712;
   --primary-hover: #38ff86;
@@ -41,7 +41,7 @@
   --border-strong: #111827;
   --text: #131a16;
   --muted: #48564d;
-  --faint: #78857c;
+  --faint: #667169; /* darkened from #78857c for AA-legible small mono labels on the light bg */
   --primary: #00a24a;
   --on-primary: #ffffff;
   --primary-hover: #008a3f;
@@ -63,13 +63,13 @@ html, body { margin: 0; padding: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   font-size: 15px;
 }
 
 /* ── generic helpers ─────────────────────────────────────────── */
-.mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums slashed-zero; }
 .muted { color: var(--muted); }
 .faint { color: var(--faint); }
 .small { font-size: 12px; }
@@ -108,7 +108,7 @@ body {
 .m-tab {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px;
   border: none; background: none; cursor: pointer; color: var(--muted); border-radius: 10px;
-  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; transition: background .12s, color .12s;
+  font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.04em; transition: background .12s, color .12s;
 }
 .m-tab:disabled { opacity: .4; cursor: not-allowed; }
 .m-tab.active { color: var(--primary); background: var(--primary-tint); }
@@ -116,7 +116,7 @@ body {
 /* ── section titles ──────────────────────────────────────────── */
 .m-section { display: flex; align-items: center; gap: 8px; margin: 24px 2px 12px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
 .m-section:first-child { margin-top: 6px; }
-.m-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--faint); }
+.m-label { font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--faint); }
 
 /* ── cards ───────────────────────────────────────────────────── */
 .m-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
@@ -124,12 +124,12 @@ body {
 .m-stack { display: flex; flex-direction: column; gap: 12px; }
 .m-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-.m-hero-amt { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 36px; letter-spacing: -0.02em; line-height: 1.05; margin-top: 8px; }
+.m-hero-amt { font-family: var(--font-mono), monospace; font-variant-numeric: tabular-nums slashed-zero; font-weight: 700; font-size: 36px; letter-spacing: -0.02em; line-height: 1.05; margin-top: 8px; }
 .m-hero-amt.mid { font-size: 26px; }
 .m-hero-amt .cur { color: var(--muted); font-size: 0.5em; font-weight: 700; }
 
 /* ── tags / dots ─────────────────────────────────────────────── */
-.m-tag { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; padding: 4px 9px; border-radius: 6px; background: var(--tag-bg); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
+.m-tag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; padding: 4px 9px; border-radius: 6px; background: var(--tag-bg); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
 .m-tag.credit { color: var(--credit); background: var(--primary-tint); border-color: var(--primary-line); }
 .m-tag.debt { color: var(--debt); background: var(--debt-tint); border-color: var(--debt-line); }
 .m-tag.warn { color: var(--warn); background: var(--warn-tint); border-color: var(--warn); }
@@ -144,8 +144,8 @@ body {
 .m-avatar.me { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
 .m-who { flex: 1; min-width: 0; }
 .m-who-name { font-weight: 700; font-size: 15px; }
-.m-who-sub { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-top: 2px; }
-.m-amt { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; text-align: right; white-space: nowrap; }
+.m-who-sub { font-family: var(--font-mono), monospace; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.m-amt { font-family: var(--font-mono), monospace; font-variant-numeric: tabular-nums slashed-zero; font-weight: 700; font-size: 15px; text-align: right; white-space: nowrap; }
 
 /* ── settlement card ─────────────────────────────────────────── */
 .m-settle-line { border: none; border-top: 1px dashed var(--border); margin: 14px 0; }
@@ -154,7 +154,7 @@ body {
 .m-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 8px 4px 0; }
 .m-chart-bar { flex: 1; background: var(--primary); border-radius: 4px 4px 0 0; min-height: 4px; opacity: .85; }
 .m-chart-bar.max { opacity: 1; }
-.m-chart-legend { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+.m-chart-legend { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-family: var(--font-mono), monospace; font-size: 12px; color: var(--muted); }
 
 /* ── category bars ───────────────────────────────────────────── */
 .m-cat { display: flex; flex-direction: column; gap: 6px; }
@@ -166,17 +166,17 @@ body {
 .chip-emoji { font-size: 15px; line-height: 1; }
 
 /* ── activity feed ───────────────────────────────────────────── */
-.m-dategroup { display: flex; justify-content: space-between; align-items: center; margin: 20px 2px 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.m-dategroup { display: flex; justify-content: space-between; align-items: center; margin: 20px 2px 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
 .m-act { display: flex; align-items: center; gap: 13px; padding: 13px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
 .m-act.accent { border-left: 3px solid var(--primary); }
 .m-act-icon { width: 42px; height: 42px; border-radius: 9px; flex-shrink: 0; display: grid; place-items: center; background: var(--tag-bg); color: var(--muted); font-size: 19px; }
 .m-act-icon.in { color: var(--primary); }
 .m-act-body { flex: 1; min-width: 0; }
 .m-act-title { font-weight: 700; font-size: 15px; }
-.m-act-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+.m-act-sub { font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
 .m-act-right { text-align: right; white-space: nowrap; }
-.m-act-amt { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; }
-.m-act-status { display: inline-flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.m-act-amt { font-family: var(--font-mono), monospace; font-variant-numeric: tabular-nums slashed-zero; font-weight: 700; font-size: 14px; }
+.m-act-status { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono), monospace; font-size: 11px; color: var(--muted); margin-top: 4px; }
 
 /* ── comment thread (per-expense discussion) ─────────────────── */
 .m-act-wrap { display: flex; flex-direction: column; }
@@ -186,7 +186,7 @@ body {
 .m-comment { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 8px; font-size: 13px; }
 .m-comment-who { font-weight: 700; color: var(--text); white-space: nowrap; }
 .m-comment-text { color: var(--text); word-break: break-word; }
-.m-comment-ts { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--faint); white-space: nowrap; }
+.m-comment-ts { font-family: var(--font-mono), monospace; font-size: 10px; color: var(--faint); white-space: nowrap; }
 .m-comment-form { display: flex; gap: 6px; align-items: center; }
 .m-comment-form .lc-input { flex: 1; }
 .m-comment-form .lc-btn-sm { flex-shrink: 0; }
@@ -207,7 +207,7 @@ body {
 /* ── buttons ─────────────────────────────────────────────────── */
 .lc-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600;
+  font-family: var(--font-mono), monospace; font-size: 14px; font-weight: 600;
   padding: 12px 16px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: background .12s, border-color .12s, opacity .12s;
 }
 .lc-btn:active { transform: translateY(1px); }
@@ -226,7 +226,7 @@ body {
 /* Onboarding wrapper: a centered, comfortably-spaced column on the empty (no-group) screen. */
 .lc-center { display: flex; flex-direction: column; justify-content: center; min-height: 70vh; padding: 8px 0; }
 /* Field label / kicker — mono uppercase, matches the mobile .m-label treatment. */
-.lc-label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--faint); }
+.lc-label { display: block; font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--faint); }
 .lc-field { margin-bottom: 14px; }
 .lc-field:last-child { margin-bottom: 0; }
 .lc-field > label { display: block; margin-bottom: 6px; }
@@ -236,12 +236,12 @@ body {
 }
 .lc-input:focus, .lc-select:focus { border-color: var(--primary); }
 .lc-input::placeholder { color: var(--faint); }
-.lc-input.mono { font-family: 'JetBrains Mono', monospace; }
+.lc-input.mono { font-family: var(--font-mono), monospace; }
 
 .lc-seg { display: flex; gap: 6px; background: var(--row); border: 1px solid var(--border); border-radius: 9px; padding: 4px; }
 .lc-seg-item {
   flex: 1; text-align: center; padding: 9px 8px; border-radius: 6px; cursor: pointer; border: none; background: none;
-  color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px; transition: background .12s, color .12s;
+  color: var(--muted); font-family: var(--font-mono), monospace; font-size: 13px; transition: background .12s, color .12s;
 }
 .lc-seg-item:hover { color: var(--text); }
 .lc-seg-item.active { background: var(--primary); color: var(--on-primary); font-weight: 600; }
@@ -284,3 +284,22 @@ a.lc-link:hover { text-decoration: underline; }
 .lc-status-dot.off { background: var(--warn); }
 
 .lc-qr { background: var(--qr-frame); padding: 10px; border-radius: 10px; width: fit-content; line-height: 0; border: 1px solid var(--border); }
+
+/* ── accessibility floor ─────────────────────────────────────── */
+/* A visible keyboard-focus ring in the pitch accent — the app was navigable but showed nothing on
+   :focus. :where() keeps zero specificity so it never fights component styles; the outline follows
+   each element's own radius. Only keyboard focus, so mouse users don't get a ring. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+/* Respect reduced-motion: keep the UI legible, drop the animation. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .lc-btn:active { transform: none; }
+}

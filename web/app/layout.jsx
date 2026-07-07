@@ -1,4 +1,10 @@
+import { Geist, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
+
+// Self-hosted (bundled at build) so the typography survives OFFLINE — the whole premise of the app.
+// A CDN <link> would drop the brand to a system font exactly when there's no signal (a stadium).
+const sans = Geist({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans', display: 'swap' })
+const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-mono', display: 'swap' })
 
 export const metadata = {
   title: 'LedgerCore — SplitKick+',
@@ -17,15 +23,9 @@ const themeInit = `(function(){try{var q=new URLSearchParams(location.search).ge
 
 export default function RootLayout ({ children }) {
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
+    <html lang="en" data-theme="dark" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
       </head>
       <body>{children}</body>
     </html>
