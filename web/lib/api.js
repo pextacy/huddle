@@ -1,7 +1,20 @@
 // Thin client for the SplitKick+ backend (server/index.mjs).
 // The P2P ledger + wallet run in that Node process; this only does HTTP/SSE.
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787'
+// Resolve the backend base URL so the SAME build works on a laptop AND on a phone over LAN:
+//   1. NEXT_PUBLIC_API_URL wins if set (explicit override).
+//   2. In the browser, hit the backend on the SAME host the page was served from, port 8787 —
+//      so opening http://192.168.1.x:3000 on a phone talks to http://192.168.1.x:8787 (the laptop).
+//   3. Fall back to localhost for SSR / non-browser.
+function resolveBase () {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:8787`
+  }
+  return 'http://localhost:8787'
+}
+
+const BASE = resolveBase()
 
 export const apiBase = BASE
 

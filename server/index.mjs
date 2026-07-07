@@ -22,13 +22,25 @@ await bridge.restore()
  * runs on some localhost port, so any localhost/127.0.0.1/::1 origin is allowed; everything else
  * gets no CORS header and is blocked by the browser.
  */
+// A private/local origin the app may run from: localhost, loopback, or a private-LAN address
+// (so a phone on the same Wi-Fi as the laptop works). PUBLIC internet origins are still refused,
+// which is what keeps the CSRF protection meaningful — evil.com can neither read nor act.
+function isLocalHost (h) {
+  if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.local')) return true
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return true // 10.0.0.0/8
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(h)) return true // 192.168.0.0/16
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(h)) return true // 172.16.0.0/12
+  if (/^(fe80:|fc|fd)/i.test(h)) return true // IPv6 link-local / unique-local
+  return false
+}
+
 function corsOrigin (req) {
   const origin = req.headers.origin
   if (!origin) return null // same-origin / non-browser caller — nothing to reflect
   try {
     // URL.hostname wraps IPv6 literals in brackets ('[::1]'), so strip them before comparing.
     const h = new URL(origin).hostname.replace(/^\[|\]$/g, '')
-    if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return origin
+    if (isLocalHost(h)) return origin
   } catch { /* malformed Origin */ }
   return null
 }

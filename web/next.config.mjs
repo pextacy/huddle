@@ -11,7 +11,10 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787'
   },
   // This app has its own lockfile under web/; pin the workspace root to silence the warning.
-  turbopack: { root }
+  turbopack: { root },
+  // Allow the dev server to be opened from the laptop's LAN address on a phone (Next otherwise
+  // warns/blocks cross-origin dev requests). dev.mjs fills LAN_ORIGINS with the detected IP.
+  allowedDevOrigins: (process.env.LAN_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)
 }
 
 export default nextConfig
