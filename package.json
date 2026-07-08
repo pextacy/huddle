@@ -15,7 +15,7 @@
     "app": "node scripts/dev.mjs"
   },
   "dependencies": {
-    "@tetherto/wdk": "1.0.0-beta.12",
+    "@tetherto/wdk": "1.0.0-beta.14",
     "@tetherto/wdk-wallet-evm": "1.0.0-beta.14",
     "autobase": "7.28.1",
     "b4a": "1.8.1",
