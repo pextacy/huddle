@@ -1,5 +1,5 @@
 {
-  "name": "splitkick-plus",
+  "name": "huddle",
   "version": "0.1.0",
   "description": "Offline-first group expense splitter with self-custodial USD₮ settlement: P2P ledger (Holepunch) + wallet (Tether WDK), Node backend + Next.js frontend.",
   "type": "module",
@@ -24,5 +24,8 @@
     "hypercore-crypto": "3.7.0",
     "hyperswarm": "4.17.0",
     "qrcode-generator": "2.0.4"
+  },
+  "overrides": {
+    "ws": "^8.21.0"
   }
 }

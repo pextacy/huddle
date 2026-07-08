@@ -1,4 +1,4 @@
-// Thin client for the SplitKick+ backend (server/index.mjs).
+// Thin client for the Huddle backend (server/index.mjs).
 // The P2P ledger + wallet run in that Node process; this only does HTTP/SSE.
 
 // Resolve the backend base URL so the SAME build works on a laptop AND on a phone over LAN:

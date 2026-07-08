@@ -1,4 +1,4 @@
-// Shared display helpers for the LedgerCore UI. Money is integer minor units (cents) everywhere.
+// Shared display helpers for the Huddle UI. Money is integer minor units (cents) everywhere.
 
 /** Format minor units (cents) as a 2-decimal string, e.g. -1234 -> "-12.34". */
 export function fmt (minor) {

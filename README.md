@@ -1,4 +1,4 @@
-# SplitKick+
+# Huddle
 
 **Offline-first group expense splitter with self-custodial USD₮ settlement.**
 
@@ -55,7 +55,7 @@ Beyond equal splits, the ledger matches what Splitwise / Tricount / Settle Up of
 ## Wallet
 
 The wallet is self-custodial: a 24-word seed is generated on first run and stored only on
-this device (`~/Library/Application Support/splitkick-plus/wallet.seed`, owner-only). It is
+this device (`~/Library/Application Support/huddle/wallet.seed`, owner-only). It is
 never logged, never committed, never replicated.
 
 ```bash
@@ -75,7 +75,7 @@ same seed derives the same address on both chains, so switching never invalidate
 
 ```bash
 npm run wallet:status                              # Sepolia testnet (default)
-SPLITKICK_NETWORK=mainnet npm run wallet:status    # Ethereum mainnet — REAL USD₮
+HUDDLE_NETWORK=mainnet npm run wallet:status    # Ethereum mainnet — REAL USD₮
 # In the app: Wallet tab → Network → tap "Ethereum" / "Sepolia · testnet"
 ```
 
@@ -87,8 +87,8 @@ before a settlement can fail for lack of native ETH.
 | `sepolia` (default) | 11155111 | Aave faucet test USDT (6 dp) | [ETH](https://www.alchemy.com/faucets/ethereum-sepolia) · [USD₮](https://app.aave.com/faucet/) |
 | `mainnet` | 1 | Canonical Tether `0xdAC17…ec7` (6 dp) | real ETH + USD₮ |
 
-Override the network, RPC, token, or seed with `SPLITKICK_NETWORK`, `SPLITKICK_RPC`,
-`SPLITKICK_USDT`, `SPLITKICK_SEED`. The same seed derives the same address on every network.
+Override the network, RPC, token, or seed with `HUDDLE_NETWORK`, `HUDDLE_RPC`,
+`HUDDLE_USDT`, `HUDDLE_SEED`. The same seed derives the same address on every network.
 
 ## Group insights — where the money went
 
@@ -102,7 +102,7 @@ throughout. Expenses written before categories existed fold into **Other**, so o
 
 ## Revenue model — settlement fee
 
-SplitKick+ earns a small **platform fee on every on-chain settlement**, skimmed to a treasury
+Huddle earns a small **platform fee on every on-chain settlement**, skimmed to a treasury
 wallet. The fee is charged **on top** of the debt: the person you owe always receives the full
 amount (so the group ledger clears exactly), and the payer additionally sends the fee to the
 treasury as a separate USD₮ transfer. The fee is recorded on the shared ledger as a `fee` entry,
@@ -110,14 +110,14 @@ so every peer can audit total revenue, and it's idempotent on its tx hash (never
 
 | Setting | Env var | Default |
 |---|---|---|
-| Fee rate (basis points) | `SPLITKICK_FEE_BPS` | `50` (0.50%) |
-| Minimum fee per settle (cents) | `SPLITKICK_FEE_MIN` | `0` |
-| Maximum fee per settle (cents) | `SPLITKICK_FEE_MAX` | uncapped |
-| Treasury address (collects fees) | `SPLITKICK_TREASURY` | testnet: demo burn address · **mainnet: required** |
+| Fee rate (basis points) | `HUDDLE_FEE_BPS` | `50` (0.50%) |
+| Minimum fee per settle (cents) | `HUDDLE_FEE_MIN` | `0` |
+| Maximum fee per settle (cents) | `HUDDLE_FEE_MAX` | uncapped |
+| Treasury address (collects fees) | `HUDDLE_TREASURY` | testnet: demo burn address · **mainnet: required** |
 
 The fee is only charged when a treasury address is configured. On **Sepolia** a demo treasury
 (the burn address) ships so the fee path runs out of the box; on **mainnet** there is no default —
-set `SPLITKICK_TREASURY` to your company wallet or the fee stays disabled (no real money is ever
+set `HUDDLE_TREASURY` to your company wallet or the fee stays disabled (no real money is ever
 sent to an unintended address). The UI shows the fee up front (`you pay X · +Y fee = Z`), prints
 both tx hashes after settling, and surfaces accrued revenue in a **Platform revenue** card.
 
@@ -136,7 +136,7 @@ when renewed early (paying early never burns remaining time).
 
 | Setting | Env var | Default |
 |---|---|---|
-| Price per month (cents) | `SPLITKICK_PRO_PRICE` | `500` (5.00 USD₮/mo) |
+| Price per month (cents) | `HUDDLE_PRO_PRICE` | `500` (5.00 USD₮/mo) |
 
 ```bash
 # Subscribe to Pro for N months (real on-chain USD₮ payment to the treasury):
@@ -146,7 +146,7 @@ curl -s -X POST localhost:8787/api/pro/subscribe -d '{"months":1}'
 
 The UI shows a **Pro** card (status, expiry, plan selector, subscribe/extend) and, while Pro is
 active, the settle rows read `Pro · no fee`. Pro requires a configured treasury — same rule as the
-settlement fee (testnet ships a demo treasury; mainnet must set `SPLITKICK_TREASURY`).
+settlement fee (testnet ships a demo treasury; mainnet must set `HUDDLE_TREASURY`).
 
 ## Architecture
 
@@ -199,6 +199,28 @@ npm run settle:verify        # settle loop: a payment clears the debt for every 
 /test             deterministic domain + p2p + wallet + bridge tests
 /docs             prd.md, docs.md, plan.md, phases.md, claude.md
 ```
+
+## Third-party services, libraries & prior work
+
+Everything Huddle depends on, disclosed for judging. All AI-free; no cloud AI APIs are used.
+
+**Core stack (the tracks)**
+- **Tether WDK** — [`@tetherto/wdk`](https://www.npmjs.com/package/@tetherto/wdk), `@tetherto/wdk-wallet-evm`. The self-custodial wallet and on-chain USD₮ settlement path — load-bearing.
+- **Holepunch / Pears P2P** — `autobase`, `corestore`, `hyperbee`, `hypercore-crypto`, `hyperswarm`, `b4a`. The entire offline peer-to-peer ledger.
+
+**Libraries**
+- `qrcode-generator` — renders group-invite QR codes (offline, no service call).
+- **Next.js + React** (`web/`) — the frontend.
+- Fonts **Geist** and **JetBrains Mono**, pulled at build time via `next/font` and **self-hosted** in the bundle (no runtime CDN call — the app stays branded offline).
+
+**External network services** (used at runtime; all optional/replaceable, none are AI)
+- **Ethereum JSON-RPC** — public endpoints (`publicnode.com`, `drpc.org`, `rpc.sepolia.org`, `ankr.com`) to read balances and broadcast USD₮ transfers. Override with `HUDDLE_RPC`.
+- **Etherscan** — explorer links for tx / address (display only).
+- **exchangerate-api** (`open.er-api.com`) — best-effort live FX prefill for multi-currency expenses. Cached to disk; fully manual/offline if unreachable, so it is never on the critical path.
+- **Faucets** (testnet only, opened as links) — [Alchemy](https://www.alchemy.com/faucets/ethereum-sepolia) for Sepolia ETH gas, [Aave](https://app.aave.com/faucet/) for test USD₮.
+
+**Prior work / reused components**
+- No pre-built application, template, or prior-hackathon codebase was reused. Huddle was written from scratch for the Tether Developers Cup; the P2P ledger, domain math (balances, settlement, splits, fees, insights), wallet integration, and UI are original. The only reused code is the open-source npm packages listed above.
 
 ## License
 

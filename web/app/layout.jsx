@@ -7,10 +7,10 @@ const sans = Geist({ subsets: ['latin'], weight: ['400', '500', '600', '700'], v
 const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-mono', display: 'swap' })
 
 export const metadata = {
-  title: 'LedgerCore — SplitKick+',
+  title: 'Huddle — split offline, settle in USD₮',
   description: 'Offline-first group expense splitting with self-custodial USD₮ settlement',
   manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'SplitKick+' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Huddle' },
   icons: { icon: '/icon-192.png', apple: '/apple-touch-icon.png' }
 }
 

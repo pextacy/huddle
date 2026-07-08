@@ -1,11 +1,11 @@
 # CLAUDE.md
 
 Guidance for any AI assistant (and any human) working in this repository. Read this before
-writing code. It encodes the non-negotiable conventions for SplitKick+.
+writing code. It encodes the non-negotiable conventions for Huddle.
 
 ## Project
 
-SplitKick+ is an **offline-first group expense splitter with self-custodial USD₮ settlement**,
+Huddle is an **offline-first group expense splitter with self-custodial USD₮ settlement**,
 built for the Tether Developers Cup. It combines a peer-to-peer ledger (Holepunch) with a
 wallet (Tether WDK), delivered as a **Node backend (`server/`) + Next.js frontend (`web/`)** —
 the Holepunch/WDK modules run in Node and the UI talks to them over HTTP/SSE. (The original

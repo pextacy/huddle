@@ -1,7 +1,7 @@
 /**
  * Platform settlement fee — the revenue model (pure, deterministic; no I/O, no floats).
  *
- * SplitKick+ earns a small fee on every on-chain USD₮ settlement, skimmed to a platform
+ * Huddle earns a small fee on every on-chain USD₮ settlement, skimmed to a platform
  * treasury wallet. The fee is charged **on top** of the debt: the creditor always receives the
  * full amount they are owed (so the group ledger clears exactly), and the payer additionally
  * sends `feeMinor` to the treasury. Total out-of-pocket for the payer is `amountMinor + feeMinor`.

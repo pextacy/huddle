@@ -1,4 +1,4 @@
-# SplitKick+ — Technical Documentation
+# Huddle — Technical Documentation
 
 Offline-first group expense splitting and self-custodial USD₮ settlement, built as a
 single peer-to-peer app on the Tether open-source stack.
@@ -12,7 +12,7 @@ single peer-to-peer app on the Tether open-source stack.
 ## 1. One-paragraph summary
 
 A group of friends goes to a match or hosts a watch party. Someone buys the tickets,
-someone else covers the food. SplitKick+ records every expense and computes who owes whom
+someone else covers the food. Huddle records every expense and computes who owes whom
 **completely offline**, peer-to-peer, so it works even when a packed stadium has saturated
 the mobile network. The shared ledger is a CRDT that every member's device holds a full copy
 of, so balances are always available with no server. When connectivity returns, debts are
@@ -85,7 +85,7 @@ logo — it is the whole offline ledger.
 
 ```
 +-------------------------------------------------------------+
-|                    SplitKick+ (one Bare app)                |
+|                    Huddle (one Bare app)                |
 |                                                             |
 |   UI layer (pear-electron / desktop, or Bare mobile)        |
 |   - Groups, expenses, balances, "Settle" button            |

@@ -1,7 +1,7 @@
 /**
  * Pro subscription — the second revenue stream (pure, deterministic; no I/O, no floats).
  *
- * SplitKick+ is freemium: casual users pay a 0.50% fee per on-chain settlement (src/domain/fees.js),
+ * Huddle is freemium: casual users pay a 0.50% fee per on-chain settlement (src/domain/fees.js),
  * while **Pro** subscribers pay a flat monthly USD₮ subscription to the platform treasury and settle
  * with **no per-settle fee**. Both streams are revenue to the same treasury; this module owns only
  * the pure time math — "is the subscription still active?" and "extend it by N months" — so it stays

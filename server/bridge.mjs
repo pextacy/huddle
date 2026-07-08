@@ -33,7 +33,7 @@ import { TREASURY, FEE, PRO, ACTIVE_NETWORK, applyNetwork, getFaucets, networkCh
 import { loadOrCreateSeed } from '../src/wallet/seed-store.js'
 import { formatUsdt } from '../src/wallet/units.js'
 
-const APP_DIR = 'splitkick-plus'
+const APP_DIR = 'huddle'
 
 const isNonEmptyStr = (s) => typeof s === 'string' && s.length > 0
 
@@ -76,7 +76,7 @@ export function createBridge (opts = {}) {
   const ratesPath = join(baseDir, 'rates.json')
 
   // Apply any persisted network choice BEFORE the wallet opens, so the first wallet connects to the
-  // right chain. Falls back to the SPLITKICK_NETWORK / sepolia default already applied by config.js.
+  // right chain. Falls back to the HUDDLE_NETWORK / sepolia default already applied by config.js.
   ;(function restoreNetwork () {
     if (!existsSync(networkPath)) return
     try {
@@ -108,9 +108,9 @@ export function createBridge (opts = {}) {
     try { return JSON.parse(readFileSync(settlesPath, 'utf8')) || {} } catch { return {} }
   }
   function persistSettleReceipts () { try { writeFileSync(settlesPath, JSON.stringify(settleReceipts, null, 2)) } catch { /* best-effort */ } }
-  function recordSettleReceipt (key, txHash, amountMinor) {
+  function recordSettleReceipt (key, txHash, amountMinor, to) {
     if (!key) return
-    settleReceipts[key] = { txHash, amountMinor, ts: Date.now() }
+    settleReceipts[key] = { txHash, amountMinor, to, ts: Date.now() }
     persistSettleReceipts()
   }
 
@@ -612,9 +612,14 @@ export function createBridge (opts = {}) {
     const voided = new Set(entries.filter((e) => e.type === 'void').map((e) => e.target))
     const now = Date.now()
     const MAX_PER_PASS = 200 // bound work per pass so a peer's back-dated templates can't runaway-spam
+    // Enumerate occurrences with a cap well above MAX_PER_PASS: dueOccurrences always restarts at
+    // index 0, so `have` skips the already-materialized ones and each pass appends the NEXT batch —
+    // remaining occurrences genuinely roll in on later passes (a smaller cap than MAX_PER_PASS would
+    // stall forever at that ceiling: a daily template would stop materializing after ~4 months).
+    const OCC_SCAN_CAP = 10000
     let appended = 0
     outer: for (const tpl of latestTemplates(entries)) {
-      for (const occ of dueOccurrences(tpl, now)) {
+      for (const occ of dueOccurrences(tpl, now, OCC_SCAN_CAP)) {
         const fields = materializeOccurrence(tpl, occ)
         if (have.has(fields.id) || voided.has(fields.id)) continue // already materialized (or deleted)
         try {
@@ -810,12 +815,27 @@ export function createBridge (opts = {}) {
     // in flight, refuse the concurrent duplicate. Falls back to no-guard when no key is supplied.
     if (key) {
       if (settleInFlight.has(key)) throw new Error('This settlement is already in progress.')
-      // A durable receipt (written the moment the transfer landed, even if the later ledger
-      // append failed) is the authoritative double-spend guard; the ledger scan is a fallback.
-      const receipt = settleReceipts[key]
-      if (receipt) return { txHash: receipt.txHash, feeTxHash: null, feeMinor: 0, totalMinor: receipt.amountMinor, duplicate: true, state: await groupState() }
+      // Already fully recorded in the shared ledger? Truly a duplicate — nothing left to do.
       const prior = (await readLedger(ledger.base)).find((e) => e.type === 'payment' && e.settleKey === key)
       if (prior) return { txHash: prior.txHash, feeTxHash: null, feeMinor: 0, totalMinor: prior.amountMinor, duplicate: true, state: await groupState() }
+      // The money already moved on a prior attempt (durable receipt written the moment the transfer
+      // landed) but the ledger append never landed — so the debt is still open for everyone. Re-record
+      // it now WITHOUT paying again, so a retry actually clears the debt instead of hanging forever.
+      // computeBalances dedups payments on txHash, so re-appending can never double-count.
+      const receipt = settleReceipts[key]
+      if (receipt) {
+        settleInFlight.add(key)
+        try {
+          let recordError = null
+          try {
+            const entry = makePayment({ id: b4a.toString(crypto.randomBytes(8), 'hex'), from: memberId, to: receipt.to ?? to, amountMinor: receipt.amountMinor, txHash: receipt.txHash, ts: Date.now(), settleKey: key })
+            await appendEntry(ledger.base, entry)
+            await ledger.base.update()
+            emit()
+          } catch (e) { recordError = e.shortMessage || e.message }
+          return { txHash: receipt.txHash, feeTxHash: null, feeMinor: 0, totalMinor: receipt.amountMinor, duplicate: true, recordError, state: await groupState() }
+        } finally { settleInFlight.delete(key) }
+      }
       settleInFlight.add(key)
     }
 
@@ -838,7 +858,7 @@ export function createBridge (opts = {}) {
       // Persist the receipt IMMEDIATELY — before the ledger append can fail. This is what makes a
       // retry (lost response, crash between transfer and append) return this hash instead of paying
       // the creditor a second time.
-      recordSettleReceipt(key, hash, amt)
+      recordSettleReceipt(key, hash, amt, to)
 
       // Record the settlement so the debt clears for everyone once replicated. The money has
       // ALREADY moved, so a recording failure must never surface as a failed settle (that would

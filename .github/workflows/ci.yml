@@ -6,6 +6,20 @@ on:
   pull_request:
 
 jobs:
+  audit:
+    name: Security — npm audit (fail on high+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Audit backend dependencies
+        run: npm audit --audit-level=high
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+        working-directory: web
+
   backend:
     name: Backend — tests + P2P/settle verification
     runs-on: ubuntu-latest

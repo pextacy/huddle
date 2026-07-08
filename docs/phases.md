@@ -1,4 +1,4 @@
-# SplitKick+ — Phases (Execution Breakdown)
+# Huddle — Phases (Execution Breakdown)
 
 Bu doküman `prd.md` (ne), `docs.md` (nasıl), `plan.md` (ne zaman) ve `claude.md` (kurallar)
 dosyalarını **uygulanabilir, dosya/fonksiyon düzeyinde fazlara** indirger. `plan.md` stratejiyi
@@ -67,7 +67,7 @@ Dosyalar: `src/wallet/{wdk.js,config.js,units.js,seed-store.js}`, `scripts/walle
 - [x] Minimal cüzdan ekranı (solid renk, gradient yok): bakiye, adres + QR (offline), ağ/zincir göstergesi (PRD §8 / FR-12).
 
 - [x] **Testnet + mainnet** desteği: `config.js` iki ağ tutar — Sepolia (varsayılan, ücretsiz)
-      ve Ethereum mainnet (opt-in `SPLITKICK_NETWORK=mainnet`, kanonik USD₮ `0xdAC17…ec7`,
+      ve Ethereum mainnet (opt-in `HUDDLE_NETWORK=mainnet`, kanonik USD₮ `0xdAC17…ec7`,
       gerçek-para uyarısı). İkisi de canlı doğrulandı.
 
 > **API doğrulaması:** `docs.md §8.3`'teki `account.sendTransaction({to, token, value})` kurulu

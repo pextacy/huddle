@@ -42,7 +42,7 @@ function shutdown () {
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 
-console.log('Starting SplitKick+  ·  backend :8787  ·  frontend :3000')
+console.log('Starting Huddle  ·  backend :8787  ·  frontend :3000')
 console.log('  On this computer:  http://localhost:3000')
 if (ip) {
   console.log(`  On your phone (same Wi-Fi):  http://${ip}:3000`)

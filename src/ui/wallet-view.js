@@ -73,7 +73,7 @@ export function renderWalletPage (state) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SplitKick+ Wallet</title>
+<title>Huddle Wallet</title>
 <style>
   /* Solid colors only — no gradients (docs/claude.md). */
   * { box-sizing: border-box; }

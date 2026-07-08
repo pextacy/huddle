@@ -6,7 +6,7 @@
  * seed touches disk, and it writes with owner-only (0600) permissions, OUTSIDE the repo.
  *
  * Precedence:
- *   1. SPLITKICK_SEED env var (used as-is, never persisted) — handy for CI / a funded demo seed.
+ *   1. HUDDLE_SEED env var (used as-is, never persisted) — handy for CI / a funded demo seed.
  *   2. A seed file in the OS application-data directory.
  *   3. Generate a fresh 24-word seed and persist it.
  *
@@ -18,7 +18,7 @@ import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs'
 
-const APP_DIR = 'splitkick-plus'
+const APP_DIR = 'huddle'
 
 /** Default per-OS application-data directory for the seed file (never inside the repo). */
 export function defaultSeedDir () {
@@ -39,7 +39,7 @@ export function defaultSeedPath () {
  * @returns {string|null}
  */
 export function loadSeed (path = defaultSeedPath()) {
-  if (process.env.SPLITKICK_SEED) return process.env.SPLITKICK_SEED.trim()
+  if (process.env.HUDDLE_SEED) return process.env.HUDDLE_SEED.trim()
   if (!existsSync(path)) return null
   return readFileSync(path, 'utf8').trim()
 }
@@ -62,8 +62,8 @@ export function saveSeed (seed, path = defaultSeedPath()) {
  * @returns {{ seed: string, created: boolean, persisted: boolean, path: string }}
  */
 export function loadOrCreateSeed (generate, path = defaultSeedPath()) {
-  if (process.env.SPLITKICK_SEED) {
-    return { seed: process.env.SPLITKICK_SEED.trim(), created: false, persisted: false, path: '(env SPLITKICK_SEED)' }
+  if (process.env.HUDDLE_SEED) {
+    return { seed: process.env.HUDDLE_SEED.trim(), created: false, persisted: false, path: '(env HUDDLE_SEED)' }
   }
   const existing = loadSeed(path)
   if (existing) return { seed: existing, created: false, persisted: true, path }

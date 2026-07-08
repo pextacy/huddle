@@ -1,5 +1,5 @@
 /**
- * SplitKick+ backend HTTP server (node:http only — no extra deps).
+ * Huddle backend HTTP server (node:http only — no extra deps).
  *
  * Exposes the bridge (live P2P ledger + self-custodial wallet) to the Next.js frontend as a
  * small REST API plus a Server-Sent Events stream for live ledger updates. CORS-enabled for
@@ -146,7 +146,7 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`SplitKick+ backend on http://localhost:${PORT}`)
+  console.log(`Huddle backend on http://localhost:${PORT}`)
 })
 
 const shutdown = async () => { await bridge.teardown(); server.close(); process.exit(0) }

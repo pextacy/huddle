@@ -57,7 +57,7 @@ export default function Page () {
         )}
 
         {!state ? (
-          connected && <><MobileHeader title="LedgerCore" /><div className="m-card"><span className="lc-empty">Loading…</span></div></>
+          connected && <><MobileHeader title="Huddle" /><div className="m-card"><span className="lc-empty">Loading…</span></div></>
         ) : !active ? (
           <Onboarding />
         ) : (

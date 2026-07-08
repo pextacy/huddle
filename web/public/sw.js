@@ -1,11 +1,11 @@
 /*
- * SplitKick+ service worker — makes the app installable and launch-capable offline.
+ * Huddle service worker — makes the app installable and launch-capable offline.
  *
  * Scope is the frontend origin (:3000). It ONLY caches this origin's app shell + static assets.
  * It never touches the backend API (a different origin, :8787) — the P2P ledger/wallet calls and
  * the SSE stream always go straight to the network, so money + live state are never served stale.
  */
-const CACHE = 'splitkick-shell-v1'
+const CACHE = 'huddle-shell-v1'
 const SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png']
 
 self.addEventListener('install', (e) => {

@@ -1,4 +1,4 @@
-# SplitKick+ — Product Requirements Document (PRD)
+# Huddle — Product Requirements Document (PRD)
 
 > **Packaging note (historical):** this PRD predates the runtime change. The app originally targeted a single Bare/Pear app; it now ships as a Node backend (`server/`) + Next.js frontend (`web/`) because Pear v2 removed `pear run`. Product requirements are unchanged. See `README.md` and `docs/claude.md` for the current architecture.
 

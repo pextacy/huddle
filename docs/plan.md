@@ -1,4 +1,4 @@
-# SplitKick+ — Build Plan
+# Huddle — Build Plan
 
 > **Packaging note (historical):** this plan predates the runtime change. The app originally targeted a single Bare/Pear app; it now ships as a Node backend (`server/`) + Next.js frontend (`web/`) because Pear v2 removed `pear run`. See `README.md` and `docs/claude.md` for the current architecture.
 

@@ -1,5 +1,5 @@
 /*
- * LedgerCore — mobile app. Industrial Minimalism, solid fills only (NO gradients).
+ * Huddle — mobile app. Industrial Minimalism, solid fills only (NO gradients).
  * Geist for chrome, JetBrains Mono for figures/labels. Dark is default; [data-theme="light"] flips.
  */
 
@@ -284,6 +284,84 @@ a.lc-link:hover { text-decoration: underline; }
 .lc-status-dot.off { background: var(--warn); }
 
 .lc-qr { background: var(--qr-frame); padding: 10px; border-radius: 10px; width: fit-content; line-height: 0; border: 1px solid var(--border); }
+
+/* ── landing / promo page (route: /about) ────────────────────────
+   Reuses every design token above — same pitch-green accent, same
+   near-black surfaces, Geist + JetBrains Mono, solid fills, NO gradients.
+   Namespaced .lp- so it never touches the mobile app shell. */
+.lp { width: 100%; min-height: 100vh; background: var(--bg); color: var(--text); overflow-x: hidden; }
+.lp-wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+/* nav */
+.lp-nav { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: saturate(1.4) blur(8px); border-bottom: 1px solid var(--border); }
+.lp-nav-in { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 62px; }
+.lp-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
+.lp-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-family: var(--font-mono), monospace; font-weight: 700; font-size: 15px; flex-shrink: 0; }
+.lp-navlinks { display: flex; align-items: center; gap: 6px; }
+.lp-navlink { display: none; padding: 8px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: background .12s, color .12s; }
+.lp-navlink:hover { color: var(--text); background: var(--hover); }
+@media (min-width: 720px) { .lp-navlink { display: inline-flex; } }
+
+/* section rhythm */
+.lp-section { padding: 72px 0; border-top: 1px solid var(--border); }
+.lp-eyebrow { font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--primary); }
+.lp-title { margin: 12px 0 0; font-size: clamp(26px, 4vw, 36px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.lp-sub { margin: 12px 0 0; color: var(--muted); font-size: 16px; max-width: 640px; line-height: 1.5; }
+
+/* hero */
+.lp-hero { display: grid; grid-template-columns: 1fr; gap: 44px; padding: 64px 0 72px; align-items: center; }
+@media (min-width: 900px) { .lp-hero { grid-template-columns: 1.05fr 0.95fr; gap: 56px; padding: 84px 0 88px; } }
+.lp-kicker { display: inline-flex; align-items: center; gap: 8px; padding: 6px 11px; border-radius: 999px; background: var(--primary-tint); border: 1px solid var(--primary-line); color: var(--primary); font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.lp-h1 { margin: 18px 0 0; font-size: clamp(34px, 6vw, 56px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.03; }
+.lp-h1 .g { color: var(--primary); }
+.lp-lead { margin: 20px 0 0; color: var(--muted); font-size: 18px; line-height: 1.55; max-width: 540px; }
+.lp-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.lp-ctas .lc-btn { text-decoration: none; }
+.lp-trust { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 26px; }
+.lp-trust span { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono), monospace; font-size: 12px; color: var(--faint); letter-spacing: 0.02em; }
+.lp-trust .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); flex-shrink: 0; }
+
+/* hero visual = a real app card mock (reuses .m- classes) inside a device frame */
+.lp-device { justify-self: center; width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 26px; padding: 14px; box-shadow: 0 30px 60px -30px rgba(0,0,0,.7); }
+.lp-device-screen { background: var(--bg); border: 1px solid var(--border); border-radius: 16px; padding: 16px 14px 18px; }
+.lp-device-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.lp-device-top h3 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+
+/* steps */
+.lp-steps { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 36px; }
+@media (min-width: 760px) { .lp-steps { grid-template-columns: repeat(3, 1fr); } }
+.lp-step { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; }
+.lp-step-n { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--primary-tint); border: 1px solid var(--primary-line); color: var(--primary); font-family: var(--font-mono), monospace; font-weight: 700; font-size: 15px; }
+.lp-step h4 { margin: 16px 0 6px; font-size: 17px; font-weight: 700; }
+.lp-step p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+/* feature grid */
+.lp-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 36px; }
+@media (min-width: 620px) { .lp-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 960px) { .lp-grid { grid-template-columns: repeat(3, 1fr); } }
+.lp-feat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; transition: border-color .14s, background .14s; }
+.lp-feat:hover { border-color: var(--border-strong); background: var(--row); }
+.lp-feat-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--primary-tint); color: var(--primary); border: 1px solid var(--primary-line); }
+.lp-feat h4 { margin: 15px 0 7px; font-size: 16px; font-weight: 700; }
+.lp-feat p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+/* tech strip */
+.lp-tech { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+.lp-chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); font-family: var(--font-mono), monospace; font-size: 13px; color: var(--text); }
+.lp-chip b { color: var(--primary); font-weight: 700; }
+
+/* closing CTA band */
+.lp-cta { text-align: center; }
+.lp-cta .lp-title { max-width: 620px; margin-left: auto; margin-right: auto; }
+.lp-cta .lp-sub { margin-left: auto; margin-right: auto; }
+.lp-cta .lp-ctas { justify-content: center; }
+
+/* footer */
+.lp-footer { border-top: 1px solid var(--border); padding: 34px 0; }
+.lp-footer-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; }
+.lp-footer-meta { font-family: var(--font-mono), monospace; font-size: 12px; color: var(--faint); }
+.lp-footer a { color: var(--muted); text-decoration: none; font-size: 13px; }
+.lp-footer a:hover { color: var(--text); }
 
 /* ── accessibility floor ─────────────────────────────────────── */
 /* A visible keyboard-focus ring in the pitch accent — the app was navigable but showed nothing on

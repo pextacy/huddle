@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SplitKick+ wallet CLI — the real, runnable wallet path (Phase 1).
+ * Huddle wallet CLI — the real, runnable wallet path (Phase 1).
  *
  *   node scripts/wallet.mjs status            # address, network, native + USD₮ balances
  *   node scripts/wallet.mjs address           # just print the receive address
@@ -59,7 +59,7 @@ async function main () {
         getNativeBalance(handle),
         getUsdtBalance(handle)
       ])
-      console.log('SplitKick+ wallet')
+      console.log('Huddle wallet')
       console.log('─'.repeat(48))
       console.log(`Network   : ${NETWORK.name} (chainId ${NETWORK.chainId}) · ${NETWORK.testnet ? 'testnet' : 'mainnet'}`)
       console.log(`Address   : ${address}`)

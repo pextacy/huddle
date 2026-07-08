@@ -1,6 +1,6 @@
 {
-  "name": "SplitKick+ — matchday expenses",
-  "short_name": "SplitKick+",
+  "name": "Huddle — matchday expenses",
+  "short_name": "Huddle",
   "description": "Offline-first group expense splitting with self-custodial USD₮ settlement.",
   "start_url": "/",
   "scope": "/",
