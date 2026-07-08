@@ -1,3 +1,4 @@
+import Script from 'next/script'
 import { Geist, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 
@@ -32,11 +33,13 @@ const themeInit = `(function(){try{var q=new URLSearchParams(location.search).ge
 export default function RootLayout ({ children }) {
   return (
     <html lang="en" data-theme="dark" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
-        <script dangerouslySetInnerHTML={{ __html: swInit }} />
-      </head>
-      <body>{children}</body>
+      <body>
+        {/* Set the theme before first paint (no flash). beforeInteractive => injected into <head>. */}
+        <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeInit }} />
+        {children}
+        {/* Register the service worker (installable + offline launch) once the page is interactive. */}
+        <Script id="sw-init" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: swInit }} />
+      </body>
     </html>
   )
 }

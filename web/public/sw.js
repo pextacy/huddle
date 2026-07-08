@@ -5,7 +5,7 @@
  * It never touches the backend API (a different origin, :8787) — the P2P ledger/wallet calls and
  * the SSE stream always go straight to the network, so money + live state are never served stale.
  */
-const CACHE = 'huddle-shell-v1'
+const CACHE = 'huddle-shell-v2'
 const SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png']
 
 self.addEventListener('install', (e) => {
