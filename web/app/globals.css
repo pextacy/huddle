@@ -309,8 +309,8 @@ a.lc-link:hover { text-decoration: underline; }
 .lp-sub { margin: 12px 0 0; color: var(--muted); font-size: 16px; max-width: 640px; line-height: 1.5; }
 
 /* hero */
-.lp-hero { display: grid; grid-template-columns: 1fr; gap: 44px; padding: 64px 0 72px; align-items: center; }
-@media (min-width: 900px) { .lp-hero { grid-template-columns: 1.05fr 0.95fr; gap: 56px; padding: 84px 0 88px; } }
+.lp-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 44px; padding-block: 64px 72px; align-items: center; }
+@media (min-width: 900px) { .lp-hero { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 56px; padding-block: 84px 88px; } }
 .lp-kicker { display: inline-flex; align-items: center; gap: 8px; padding: 6px 11px; border-radius: 999px; background: var(--primary-tint); border: 1px solid var(--primary-line); color: var(--primary); font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .lp-h1 { margin: 18px 0 0; font-size: clamp(34px, 6vw, 56px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.03; }
 .lp-h1 .g { color: var(--primary); }
@@ -380,4 +380,65 @@ a.lc-link:hover { text-decoration: underline; }
     scroll-behavior: auto !important;
   }
   .lc-btn:active { transform: none; }
+  /* JS reveals never stay hidden without motion */
+  .lp-js .lp-reveal { opacity: 1 !important; transform: none !important; }
 }
+
+/* ── landing motion — floodlit pitch + live ledger ───────────────
+   Solid fills only (no gradients), namespaced .lp-. All the reveal/stagger
+   work is gated behind prefers-reduced-motion via the block above. */
+
+/* the pitch backdrop behind the hero */
+.lp-hero { position: relative; }
+.lp-hero-copy, .lp-hero .lp-device { position: relative; z-index: 1; min-width: 0; }
+/* the ambient pitch is a desktop-only accent — on a phone the hero stacks and there's no room
+   for it to sit behind the card without crossing the copy, so it's hidden below 900px. */
+.lp-pitch { display: none; }
+.lp-pitch-svg { width: min(680px, 100%); height: auto; aspect-ratio: 1; }
+.lp-pitch-sweep { transform-box: view-box; transform-origin: 240px 240px; }
+@media (min-width: 900px) { .lp-pitch { position: absolute; inset: 0 -8% 0 auto; width: 62%; display: grid; place-items: center; justify-items: end; z-index: 0; pointer-events: none; } }
+
+/* live device accents */
+.lp-live-dot { display: inline-block; }
+.lp-settle { position: relative; }
+
+/* hover micro-interactions (reduced-motion block neutralises the transforms) */
+.lp-feat { transition: border-color .16s, background .16s, transform .16s; }
+.lp-feat:hover { transform: translateY(-3px); }
+.lp-feat-ic { transition: transform .2s cubic-bezier(.2,.7,.2,1), background .16s; }
+.lp-feat:hover .lp-feat-ic { transform: scale(1.09) rotate(-4deg); }
+.lp-step { transition: border-color .16s, transform .16s, background .16s; }
+.lp-step:hover { transform: translateY(-3px); border-color: var(--border-strong); background: var(--row); }
+.lp-step-n { transition: background .16s, color .16s, transform .2s; }
+.lp-step:hover .lp-step-n { transform: translateY(-1px) scale(1.05); }
+.lp-chip { transition: border-color .14s, transform .14s, color .14s; }
+.lp-chip:hover { transform: translateY(-2px); border-color: var(--primary-line); }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* hero load stagger */
+  .lp-hero-copy > .lp-kicker,
+  .lp-hero-copy > .lp-h1,
+  .lp-hero-copy > .lp-lead,
+  .lp-hero-copy > .lp-ctas,
+  .lp-hero-copy > .lp-trust { opacity: 0; animation: lp-rise .8s cubic-bezier(.2,.7,.2,1) forwards; }
+  .lp-hero-copy > .lp-kicker { animation-delay: .06s; }
+  .lp-hero-copy > .lp-h1     { animation-delay: .16s; }
+  .lp-hero-copy > .lp-lead   { animation-delay: .30s; }
+  .lp-hero-copy > .lp-ctas   { animation-delay: .44s; }
+  .lp-hero-copy > .lp-trust  { animation-delay: .56s; }
+  .lp-hero .lp-device { opacity: 0; animation: lp-rise-in .95s cubic-bezier(.2,.7,.2,1) .38s forwards; }
+
+  /* scroll reveals (only hidden once JS confirms it can reveal them) */
+  .lp-js .lp-reveal { opacity: 0; transform: translateY(20px); transition: opacity .6s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+  .lp-js .lp-reveal.in { opacity: 1; transform: none; }
+
+  /* ambient + live pulse — kept deliberately to two loops: the pitch sweep (signature)
+     and the ONLINE dot (it means something). No third competing animation. */
+  .lp-pitch-sweep { animation: lp-sweep 16s linear infinite; }
+  .lp-live-dot { animation: lp-blink 2.2s ease-in-out infinite; }
+}
+
+@keyframes lp-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes lp-rise-in { from { opacity: 0; transform: translateY(24px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes lp-sweep { to { transform: rotate(360deg); } }
+@keyframes lp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
