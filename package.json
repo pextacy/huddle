@@ -19,7 +19,7 @@
     "@tetherto/wdk-wallet-evm": "1.0.0-beta.14",
     "autobase": "7.28.1",
     "b4a": "1.8.1",
-    "corestore": "7.11.0",
+    "corestore": "7.11.1",
     "hyperbee": "2.27.3",
     "hypercore-crypto": "3.7.0",
     "hyperswarm": "4.17.0",
