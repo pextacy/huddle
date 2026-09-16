@@ -17,12 +17,12 @@
   "dependencies": {
     "@tetherto/wdk": "1.0.0-beta.12",
     "@tetherto/wdk-wallet-evm": "1.0.0-beta.14",
-    "autobase": "7.28.1",
+    "autobase": "7.28.2",
     "b4a": "1.8.1",
-    "corestore": "7.11.0",
+    "corestore": "7.12.5",
     "hyperbee": "2.27.3",
     "hypercore-crypto": "3.7.0",
-    "hyperswarm": "4.17.0",
+    "hyperswarm": "4.17.1",
     "qrcode-generator": "2.0.4"
   },
   "overrides": {
